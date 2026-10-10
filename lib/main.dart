@@ -13,9 +13,10 @@ Future<void> main() async {
   final storage = await StorageService.create();
   final notifications = NotificationService();
   await notifications.init();
-  runApp(JalMitraApp(
-    controller: AppController(storage, notifications: notifications),
-  ));
+  final controller = AppController(storage, notifications: notifications);
+  runApp(JalMitraApp(controller: controller));
+  // Keep the next two weeks of morning tips scheduled (if turned on).
+  controller.refreshTipNotifications();
 }
 
 class JalMitraApp extends StatelessWidget {

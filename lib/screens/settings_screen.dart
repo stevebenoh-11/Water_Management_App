@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../models/user_settings.dart';
+import '../services/calc_service.dart' as calc;
 import '../theme/app_theme.dart';
 import '../widgets/app_scope.dart';
 import '../widgets/common.dart';
-import '../widgets/formatters.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/number_field.dart';
+import '../widgets/pickers.dart';
 import 'fixtures_screen.dart';
+import 'tanks_screen.dart';
 
-/// Edit home setup, language, demo mode, calibration, fixtures, reset.
+/// Home details, language, defaults, tanks, taps, demo mode, tips,
+/// permissions and reset.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -18,35 +22,36 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _tank = TextEditingController();
-  final _hp = TextEditingController();
+  final _people = TextEditingController();
+  final _lpp = TextEditingController();
   final _rate = TextEditingController();
+  final _hp = TextEditingController();
   final _overflow = TextEditingController();
+  AreaType _area = AreaType.city;
   bool _loaded = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loaded) {
-      _fillFromSettings();
+      final s = context.app.settings;
+      _people.text = '${s.peopleCount}';
+      _lpp.text = s.litresPerPersonOverride == null
+          ? ''
+          : formatNumber(s.litresPerPersonOverride!);
+      _rate.text = formatNumber(s.electricityRate);
+      _hp.text = formatNumber(s.defaultMotorHp);
+      _overflow.text = formatNumber(s.defaultOverflowMinutes);
+      _area = s.areaType;
       _loaded = true;
     }
   }
 
-  void _fillFromSettings() {
-    final s = context.app.settings;
-    _tank.text = formatNumber(s.tankCapacityLitres);
-    _hp.text = formatNumber(s.motorHp);
-    _rate.text = formatNumber(s.electricityRate);
-    _overflow.text = formatNumber(s.overflowMinutes);
-  }
-
   @override
   void dispose() {
-    _tank.dispose();
-    _hp.dispose();
-    _rate.dispose();
-    _overflow.dispose();
+    for (final c in [_people, _lpp, _rate, _hp, _overflow]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -54,25 +59,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final app = context.app;
+    final lpp = _lpp.text.trim();
     await app.updateSettings(app.settings.copyWith(
-      tankCapacityLitres: double.parse(_tank.text.trim()),
-      motorHp: double.parse(_hp.text.trim()),
+      peopleCount: int.parse(_people.text.trim()),
+      areaType: _area,
+      litresPerPersonOverride: lpp.isEmpty ? null : double.parse(lpp),
+      clearLitresOverride: lpp.isEmpty,
       electricityRate: double.parse(_rate.text.trim()),
-      overflowMinutes: double.parse(_overflow.text.trim()),
+      defaultMotorHp: double.parse(_hp.text.trim()),
+      defaultOverflowMinutes: double.parse(_overflow.text.trim()),
     ));
     if (mounted) showSnack(context, context.tr('settingsSaved'));
-  }
-
-  Future<void> _recalibrate() async {
-    final ok = await confirmDialog(
-      context,
-      title: context.tr('recalibrateTitle'),
-      message: context.tr('recalibrateMsg'),
-      confirmLabel: context.tr('recalibrate'),
-    );
-    if (!ok || !mounted) return;
-    await context.app.recalibrate();
-    if (mounted) showSnack(context, context.tr('recalibrateDone'));
   }
 
   Future<void> _reset() async {
@@ -91,7 +88,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final app = context.app;
     final theme = Theme.of(context);
-    final fill = app.fillTime;
+    const gap = SizedBox(height: 16);
 
     return Scaffold(
       appBar: AppBar(
@@ -101,31 +98,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ---- Home setup
+          SectionCard(
+            icon: Icons.translate,
+            title: context.tr('language'),
+            child: const Align(
+                alignment: Alignment.centerLeft, child: LanguageToggle()),
+          ),
+
+          // ---- Home & defaults
           SectionCard(
             icon: Icons.home_outlined,
-            title: context.tr('setupTitle'),
+            title: context.tr('yourHome'),
             child: Form(
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   NumberField(
-                    controller: _tank,
-                    label: context.tr('tankCapacity'),
-                    suffix: context.tr('unitLitres'),
-                    icon: Icons.propane_tank_outlined,
-                    max: 100000,
+                    controller: _people,
+                    label: context.tr('peopleAtHome'),
+                    icon: Icons.groups_outlined,
+                    max: 50,
+                    wholeNumber: true,
                   ),
-                  const SizedBox(height: 16),
+                  gap,
+                  AreaPicker(
+                      value: _area,
+                      onChanged: (a) => setState(() => _area = a)),
+                  gap,
                   NumberField(
-                    controller: _hp,
-                    label: context.tr('motorHp'),
-                    suffix: context.tr('unitHp'),
-                    icon: Icons.electric_bolt_outlined,
-                    max: 20,
+                    controller: _lpp,
+                    label: context.tr('litresPerPerson'),
+                    helper: context.tr('litresPerPersonHelp', {
+                      'n': formatNumber(calc.defaultLitresPerPerson(_area)),
+                    }),
+                    suffix: context.tr('unitLitres'),
+                    icon: Icons.person_outline,
+                    max: 1000,
+                    optional: true,
                   ),
-                  const SizedBox(height: 16),
+                  gap,
                   NumberField(
                     controller: _rate,
                     label: context.tr('electricityRate'),
@@ -133,16 +145,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.currency_rupee,
                     max: 100,
                   ),
-                  const SizedBox(height: 16),
+                  gap,
+                  NumberField(
+                    controller: _hp,
+                    label: context.tr('defaultMotorHp'),
+                    suffix: context.tr('unitHp'),
+                    icon: Icons.electric_bolt_outlined,
+                    max: 20,
+                  ),
+                  gap,
                   NumberField(
                     controller: _overflow,
-                    label: context.tr('overflowMinutes'),
+                    label: context.tr('defaultOverflow'),
                     suffix: context.tr('unitMinutes'),
                     icon: Icons.timer_outlined,
                     max: 240,
                     textInputAction: TextInputAction.done,
                   ),
-                  const SizedBox(height: 16),
+                  gap,
                   FilledButton.icon(
                     onPressed: _save,
                     icon: const Icon(Icons.save_outlined),
@@ -153,50 +173,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // ---- Language
-          SectionCard(
-            icon: Icons.translate,
-            title: context.tr('language'),
-            child: const Align(
-                alignment: Alignment.centerLeft, child: LanguageToggle()),
-          ),
-
-          // ---- Demo mode
-          Card(
-            child: SwitchListTile(
-              secondary: const Icon(Icons.fast_forward,
-                  color: AppColors.warning, size: 30),
-              title: Text(context.tr('demoMode')),
-              subtitle: Text(context.tr('demoModeHelp')),
-              value: app.demoMode,
-              onChanged: app.setDemoMode,
-            ),
-          ),
-
-          // ---- Motor & fixtures
+          // ---- Tanks, taps, modes
           Card(
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.power_settings_new,
+                  leading: const Icon(Icons.propane_tank_outlined,
                       color: AppColors.blue, size: 30),
-                  title: Text(context.tr('motorCalibration')),
-                  subtitle: Text(fill == null
-                      ? context.tr('notCalibrated')
-                      : '${context.tr('fillTimeLearned', {'time': formatDuration(context, fill)})}\n${context.tr('fillRuns', {'n': '${app.fillCount}'})}'),
-                  isThreeLine: fill != null,
-                ),
-                if (fill != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52)),
-                      onPressed: _recalibrate,
-                      icon: const Icon(Icons.tune),
-                      label: Text(context.tr('recalibrate')),
-                    ),
+                  title: Text(context.tr('myTanks')),
+                  subtitle: Text(
+                      context.tr('tankCount', {'n': '${app.tanks.length}'})),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const TanksScreen()),
                   ),
+                ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.shower_outlined,
@@ -212,13 +204,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.notifications_active_outlined,
-                      color: AppColors.blue, size: 30),
-                  title: Text(context.tr('alarmPermissions')),
-                  subtitle: Text(context.tr('alarmPermissionsHelp')),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => app.notifications.requestPermissions(),
+                SwitchListTile(
+                  secondary: const Icon(Icons.fast_forward,
+                      color: AppColors.warning, size: 30),
+                  title: Text(context.tr('demoMode')),
+                  subtitle: Text(context.tr('demoModeHelp')),
+                  value: app.demoMode,
+                  onChanged: app.setDemoMode,
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.lightbulb_outline,
+                      color: AppColors.teal, size: 30),
+                  title: Text(context.tr('tipNotifications')),
+                  subtitle: Text(context.tr('tipNotificationsHelp')),
+                  value: app.settings.tipNotifications,
+                  onChanged: app.setTipNotifications,
+                ),
+              ],
+            ),
+          ),
+
+          // ---- Alarms
+          SectionCard(
+            icon: Icons.notifications_active_outlined,
+            title: context.tr('alarmPermissions'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(context.tr('alarmPermissionsHelp'),
+                    style: theme.textTheme.bodyLarge),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => app.notifications.requestPermissions(),
+                  icon: const Icon(Icons.alarm_on),
+                  label: Text(context.tr('allowAlarms')),
+                ),
+                const SizedBox(height: 12),
+                MessageBox(
+                  icon: Icons.battery_alert_outlined,
+                  color: AppColors.warning,
+                  text: context.tr('batteryNote'),
                 ),
               ],
             ),
@@ -239,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             context.tr('about'),
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
           ),
           const SizedBox(height: 16),
         ],

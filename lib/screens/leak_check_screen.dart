@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/day_savings.dart';
+import '../models/leak.dart';
 import '../models/meter_test.dart';
 import '../services/calc_service.dart' as calc;
 import '../theme/app_theme.dart';
@@ -62,6 +62,7 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
     with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
   final _manual = TextEditingController();
+  final _leakName = TextEditingController();
   Timer? _timer;
   int _secondsLeft = 0;
   int _taps = 0;
@@ -76,6 +77,7 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
   void dispose() {
     _timer?.cancel();
     _manual.dispose();
+    _leakName.dispose();
     super.dispose();
   }
 
@@ -110,16 +112,50 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
     setState(() => _result = double.parse(_manual.text.trim()).round());
   }
 
+  void _clearResult() => setState(() {
+        _result = null;
+        _manual.clear();
+        _leakName.clear();
+      });
+
+  /// Fixed straight away: add a month of avoided waste to savings.
   Future<void> _fixedIt() async {
     final monthly = calc.dripLitresPerMonth(_result!);
-    await context.app.addSavings(DaySavings(litres: monthly));
+    await context.app.addFixedDripSaving(_result!);
     if (!mounted) return;
     showSnack(context,
         context.tr('fixedItSaved', {'litres': formatLitres(monthly)}));
-    setState(() {
-      _result = null;
-      _manual.clear();
-    });
+    _clearResult();
+  }
+
+  /// Not fixed yet: save it so its daily loss counts as waste.
+  Future<void> _saveLeak() async {
+    final name = _leakName.text.trim().isEmpty
+        ? context.tr('leakDefaultName')
+        : _leakName.text.trim();
+    await context.app.addLeak(name, _result!);
+    if (!mounted) return;
+    showSnack(context, context.tr('leakSaved'));
+    _clearResult();
+  }
+
+  Future<void> _fixSavedLeak(Leak leak) async {
+    final monthly = await context.app.fixLeak(leak.id);
+    if (mounted) {
+      showSnack(context,
+          context.tr('fixedItSaved', {'litres': formatLitres(monthly)}));
+    }
+  }
+
+  Future<void> _deleteSavedLeak(Leak leak) async {
+    final ok = await confirmDialog(
+      context,
+      title: context.tr('deleteLeakTitle'),
+      message: context.tr('deleteLeakMsg', {'name': leak.name}),
+      confirmLabel: context.tr('delete'),
+      danger: true,
+    );
+    if (ok && mounted) await context.app.deleteLeak(leak.id);
   }
 
   String? _validateDrips(String? value) {
@@ -220,6 +256,8 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
             const SizedBox(height: 20),
             _buildResult(_result!),
           ],
+          const SizedBox(height: 20),
+          _buildActiveLeaks(),
         ],
       ),
     );
@@ -265,6 +303,24 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
               icon: const Icon(Icons.build_circle_outlined),
               label: Text(context.tr('fixedIt')),
             ),
+            const SizedBox(height: 16),
+            Text(context.tr('notFixedYet'), style: theme.textTheme.bodyLarge),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _leakName,
+              maxLength: 30,
+              style: theme.textTheme.titleMedium,
+              decoration: InputDecoration(
+                labelText: context.tr('leakName'),
+                hintText: context.tr('leakDefaultName'),
+                prefixIcon: const Icon(Icons.label_outline),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _saveLeak,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: Text(context.tr('saveLeak')),
+            ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _startCount,
@@ -274,6 +330,63 @@ class _DripCalculatorTabState extends State<DripCalculatorTab>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildActiveLeaks() {
+    final leaks = context.app.activeLeaks;
+    return SectionCard(
+      icon: Icons.plumbing,
+      color: AppColors.danger,
+      title: context.tr('activeLeaks'),
+      child: leaks.isEmpty
+          ? EmptyState(
+              icon: Icons.check_circle_outline, text: context.tr('noActiveLeaks'))
+          : Column(
+              children: [
+                for (final leak in leaks)
+                  Card(
+                    color: AppColors.danger.withValues(alpha: 0.05),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.water_drop,
+                                  color: AppColors.danger),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(leak.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
+                              ),
+                              IconButton(
+                                tooltip: context.tr('delete'),
+                                onPressed: () => _deleteSavedLeak(leak),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
+                          Text(context.tr('leakWastesPerDay', {
+                            'litres': formatLitres(leak.litresPerDay),
+                          })),
+                          const SizedBox(height: 8),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.success),
+                            onPressed: () => _fixSavedLeak(leak),
+                            icon: const Icon(Icons.build_circle_outlined),
+                            label: Text(context.tr('fixedIt')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }

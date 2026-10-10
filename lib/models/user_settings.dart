@@ -1,81 +1,118 @@
+/// Where the home is; sets the default litres per person per day.
+enum AreaType { city, town, village }
+
 /// Household setup entered during onboarding and editable in Settings.
+/// (Tank size, motor HP and overflow minutes live on each TankProfile;
+/// the values here are the defaults for new tanks.)
 class UserSettings {
   const UserSettings({
-    this.tankCapacityLitres = defaultTankCapacity,
-    this.motorHp = defaultMotorHp,
-    this.electricityRate = defaultElectricityRate,
-    this.overflowMinutes = defaultOverflowMinutes,
     this.languageCode = 'en',
+    this.peopleCount = defaultPeople,
+    this.areaType = AreaType.city,
+    this.litresPerPersonOverride,
+    this.electricityRate = defaultElectricityRate,
+    this.defaultMotorHp = defaultHp,
+    this.defaultOverflowMinutes = defaultOverflow,
     this.demoMode = false,
+    this.tipNotifications = false,
   });
 
-  static const double defaultTankCapacity = 1000;
-  static const double defaultMotorHp = 1;
+  static const int defaultPeople = 4;
   static const double defaultElectricityRate = 6;
-  static const double defaultOverflowMinutes = 5;
+  static const double defaultHp = 1;
+  static const double defaultOverflow = 5;
+  static const double defaultTankCapacity = 1000;
 
-  /// Overhead tank capacity in litres.
-  final double tankCapacityLitres;
+  /// 'en' or 'ta'.
+  final String languageCode;
+  final int peopleCount;
+  final AreaType areaType;
 
-  /// Motor power in horsepower.
-  final double motorHp;
+  /// User's own litres per person per day (null = use the area default).
+  final double? litresPerPersonOverride;
 
   /// Electricity tariff in ₹ per unit (kWh).
   final double electricityRate;
 
-  /// Typical minutes a tank overflows before anyone notices.
-  final double overflowMinutes;
-
-  /// 'en' or 'ta'.
-  final String languageCode;
+  /// Defaults for new tanks.
+  final double defaultMotorHp;
+  final double defaultOverflowMinutes;
 
   /// When true, 1 minute = 1 second for Motor Guard timings.
   final bool demoMode;
 
+  /// Morning "Tip of the Day" notification (off by default).
+  final bool tipNotifications;
+
   UserSettings copyWith({
-    double? tankCapacityLitres,
-    double? motorHp,
-    double? electricityRate,
-    double? overflowMinutes,
     String? languageCode,
+    int? peopleCount,
+    AreaType? areaType,
+    double? litresPerPersonOverride,
+    bool clearLitresOverride = false,
+    double? electricityRate,
+    double? defaultMotorHp,
+    double? defaultOverflowMinutes,
     bool? demoMode,
+    bool? tipNotifications,
   }) {
     return UserSettings(
-      tankCapacityLitres: tankCapacityLitres ?? this.tankCapacityLitres,
-      motorHp: motorHp ?? this.motorHp,
-      electricityRate: electricityRate ?? this.electricityRate,
-      overflowMinutes: overflowMinutes ?? this.overflowMinutes,
       languageCode: languageCode ?? this.languageCode,
+      peopleCount: peopleCount ?? this.peopleCount,
+      areaType: areaType ?? this.areaType,
+      litresPerPersonOverride: clearLitresOverride
+          ? null
+          : litresPerPersonOverride ?? this.litresPerPersonOverride,
+      electricityRate: electricityRate ?? this.electricityRate,
+      defaultMotorHp: defaultMotorHp ?? this.defaultMotorHp,
+      defaultOverflowMinutes:
+          defaultOverflowMinutes ?? this.defaultOverflowMinutes,
       demoMode: demoMode ?? this.demoMode,
+      tipNotifications: tipNotifications ?? this.tipNotifications,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'tankCapacityLitres': tankCapacityLitres,
-        'motorHp': motorHp,
-        'electricityRate': electricityRate,
-        'overflowMinutes': overflowMinutes,
         'languageCode': languageCode,
+        'peopleCount': peopleCount,
+        'areaType': areaType.name,
+        'litresPerPersonOverride': litresPerPersonOverride,
+        'electricityRate': electricityRate,
+        'defaultMotorHp': defaultMotorHp,
+        'defaultOverflowMinutes': defaultOverflowMinutes,
         'demoMode': demoMode,
+        'tipNotifications': tipNotifications,
       };
 
   /// Falls back to defaults for any missing or invalid (zero/negative) value,
-  /// so corrupted storage can never crash the app.
+  /// so corrupted storage can never crash the app. Also reads the keys used
+  /// by older versions ('motorHp', 'overflowMinutes').
   factory UserSettings.fromJson(Map<String, dynamic> json) {
-    double positive(Object? v, double fallback) {
+    double? positiveOrNull(Object? v) {
       final d = (v is num) ? v.toDouble() : null;
-      return (d != null && d > 0 && d.isFinite) ? d : fallback;
+      return (d != null && d > 0 && d.isFinite) ? d : null;
     }
 
-    final lang = json['languageCode'];
+    double positive(Object? v, double fallback) =>
+        positiveOrNull(v) ?? fallback;
+
+    final people = json['peopleCount'];
+    final area = AreaType.values
+        .where((a) => a.name == json['areaType'])
+        .firstOrNull;
     return UserSettings(
-      tankCapacityLitres:
-          positive(json['tankCapacityLitres'], defaultTankCapacity),
-      motorHp: positive(json['motorHp'], defaultMotorHp),
+      languageCode: json['languageCode'] == 'ta' ? 'ta' : 'en',
+      peopleCount: (people is num && people >= 1) ? people.toInt() : defaultPeople,
+      areaType: area ?? AreaType.city,
+      litresPerPersonOverride: positiveOrNull(json['litresPerPersonOverride']),
       electricityRate: positive(json['electricityRate'], defaultElectricityRate),
-      overflowMinutes: positive(json['overflowMinutes'], defaultOverflowMinutes),
-      languageCode: (lang == 'ta') ? 'ta' : 'en',
+      defaultMotorHp:
+          positive(json['defaultMotorHp'] ?? json['motorHp'], defaultHp),
+      defaultOverflowMinutes: positive(
+          json['defaultOverflowMinutes'] ?? json['overflowMinutes'],
+          defaultOverflow),
       demoMode: json['demoMode'] == true,
+      tipNotifications: json['tipNotifications'] == true,
     );
   }
 }

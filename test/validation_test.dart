@@ -40,36 +40,46 @@ void main() {
     expect(formatNumber(1.5), '1.5');
   });
 
+  test('whole numbers', () {
+    expect(positiveNumberError('4', wholeNumber: true), isNull);
+    expect(positiveNumberError('4.5', wholeNumber: true), 'errWholeNumber');
+  });
+
   group('UserSettings', () {
-    test('defaults match CLAUDE.md', () {
+    test('defaults match the spec', () {
       const s = UserSettings();
-      expect(s.tankCapacityLitres, 1000);
-      expect(s.motorHp, 1);
+      expect(s.peopleCount, 4);
+      expect(s.areaType, AreaType.city);
+      expect(s.defaultMotorHp, 1);
       expect(s.electricityRate, 6);
-      expect(s.overflowMinutes, 5);
+      expect(s.defaultOverflowMinutes, 5);
       expect(s.languageCode, 'en');
       expect(s.demoMode, isFalse);
+      expect(s.tipNotifications, isFalse);
     });
 
     test('JSON round trip', () {
       const s = UserSettings(
-        tankCapacityLitres: 2000,
-        motorHp: 1.5,
-        electricityRate: 7.5,
-        overflowMinutes: 10,
         languageCode: 'ta',
+        peopleCount: 6,
+        areaType: AreaType.village,
+        litresPerPersonOverride: 70,
+        electricityRate: 7.5,
+        defaultMotorHp: 1.5,
+        defaultOverflowMinutes: 10,
         demoMode: true,
+        tipNotifications: true,
       );
-      final r = UserSettings.fromJson(s.toJson());
-      expect(r.toJson(), s.toJson());
+      expect(UserSettings.fromJson(s.toJson()).toJson(), s.toJson());
     });
 
     test('invalid stored values fall back to defaults', () {
       final r = UserSettings.fromJson({
-        'tankCapacityLitres': 0,
-        'motorHp': -1,
+        'peopleCount': 0,
+        'defaultMotorHp': -1,
         'electricityRate': 'x',
         'languageCode': 'fr',
+        'areaType': 'moon',
       });
       expect(r.toJson(), const UserSettings().toJson());
     });

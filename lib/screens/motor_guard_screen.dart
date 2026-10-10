@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/motor_session.dart';
+import '../models/tank_profile.dart';
 import '../services/app_controller.dart';
 import '../services/calc_service.dart' as calc;
 import '../theme/app_theme.dart';
@@ -10,6 +11,8 @@ import '../widgets/app_scope.dart';
 import '../widgets/common.dart';
 import '../widgets/countdown_ring.dart';
 import '../widgets/formatters.dart';
+import '../widgets/tank_labels.dart';
+import 'tanks_screen.dart';
 
 /// HERO FEATURE: predicts when the overhead tank will be full and rings an
 /// exact alarm 2 minutes before, even if the app is closed.
@@ -123,12 +126,28 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
           children: [
             Text(
               ctx.tr('successMsg', {
-                'litres': formatLitres(r.savings.litres),
-                'rupees': formatFixed(r.savings.rupees, 2),
+                'litres': formatLitres(r.record.saved),
+                'rupees': formatFixed(r.record.rupees, 2),
               }),
               textAlign: TextAlign.center,
               style: Theme.of(ctx).textTheme.titleMedium,
             ),
+            const SizedBox(height: 12),
+            Text(
+              ctx.tr('pumpedMsg', {'litres': formatLitres(r.record.used)}),
+              textAlign: TextAlign.center,
+            ),
+            if (r.record.wasted > 0) ...[
+              const SizedBox(height: 8),
+              MessageBox(
+                icon: Icons.warning_amber_rounded,
+                color: AppColors.warning,
+                text: ctx.tr('lateOverflowMsg', {
+                  'minutes': r.minutesLate.toStringAsFixed(1),
+                  'litres': formatLitres(r.record.wasted),
+                }),
+              ),
+            ],
             const SizedBox(height: 12),
             Text(
               r.learned
@@ -155,26 +174,44 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
   Widget build(BuildContext context) {
     final app = context.app;
     final session = app.motorSession;
+    final tank = app.selectedTank;
 
     final Widget body;
-    if (session != null && session.isCalibration) {
+    if (tank == null) {
+      body = EmptyState(
+          icon: Icons.propane_tank_outlined, text: context.tr('noTanks'));
+    } else if (session != null && session.isCalibration) {
       body = _buildCalibrating(app, session);
     } else if (session != null) {
       body = _buildRunning(app, session);
-    } else if (!app.isCalibrated) {
-      body = _buildCalibrationIntro();
+    } else if (!tank.isCalibrated) {
+      body = _buildCalibrationIntro(tank);
     } else {
-      body = _buildIdle(app);
+      body = _buildIdle(app, tank);
     }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(context.tr('navMotor')),
-        actions: const [DemoBadge()],
+        actions: [
+          const DemoBadge(),
+          IconButton(
+            tooltip: context.tr('myTanks'),
+            icon: const Icon(Icons.propane_tank_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const TanksScreen()),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (tank != null) ...[
+            _TankSelector(locked: session != null),
+            const SizedBox(height: 12),
+          ],
           if (_notificationsOk == false) ...[
             MessageBox(
               icon: Icons.notifications_off_outlined,
@@ -205,7 +242,7 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
     );
   }
 
-  Widget _buildCalibrationIntro() {
+  Widget _buildCalibrationIntro(TankProfile tank) {
     final theme = Theme.of(context);
     return SectionCard(
       icon: Icons.tune,
@@ -237,7 +274,9 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
             ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _busy ? null : () => _run((app) => app.startCalibration()),
+            onPressed: _busy
+                ? null
+                : () => _run((app) => app.startCalibration(tank.id)),
             icon: const Icon(Icons.play_arrow),
             label: Text(context.tr('startCalibration')),
           ),
@@ -296,9 +335,9 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
     );
   }
 
-  Widget _buildIdle(AppController app) {
+  Widget _buildIdle(AppController app, TankProfile tank) {
     final theme = Theme.of(context);
-    final fill = app.fillTime!;
+    final fill = tank.fillTimeSeconds!;
     final remaining = calc.remainingFillSeconds(fill, _level);
     final deviceRemaining =
         calc.toDeviceSeconds(remaining, demoMode: app.demoMode);
@@ -313,7 +352,7 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
             leading: const Icon(Icons.speed, color: AppColors.teal, size: 32),
             title: Text(context.tr('fillTimeLearned',
                 {'time': formatDuration(context, fill)})),
-            subtitle: Text(context.tr('fillRuns', {'n': '${app.fillCount}'})),
+            subtitle: Text(context.tr('fillRuns', {'n': '${tank.fillCount}'})),
           ),
         ),
         const SizedBox(height: 8),
@@ -359,7 +398,9 @@ class _MotorGuardScreenState extends State<MotorGuardScreen>
         FilledButton.icon(
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(72)),
           onPressed:
-              _busy ? null : () => _run((app) => app.startMotorSession(_level)),
+              _busy
+              ? null
+              : () => _run((app) => app.startMotorSession(tank.id, _level)),
           icon: const Icon(Icons.power_settings_new, size: 32),
           label: Text(context.tr('startGuard')),
         ),
@@ -524,6 +565,59 @@ class _LevelTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Tank chooser at the top of Motor Guard. Locked while a session runs.
+class _TankSelector extends StatelessWidget {
+  const _TankSelector({required this.locked});
+
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app;
+    final tank = app.selectedTank!;
+    final theme = Theme.of(context);
+    if (locked || app.tanks.length == 1) {
+      return Card(
+        child: ListTile(
+          leading: Icon(materialIcon(tank.material),
+              color: AppColors.deepBlue, size: 30),
+          title: Text(app.tankDisplayName(tank),
+              style: theme.textTheme.titleMedium),
+          subtitle: Text(
+              '${formatLitres(tank.capacityLitres)} ${context.tr('unitLitres')}'),
+          trailing: locked ? const Icon(Icons.lock_outline) : null,
+        ),
+      );
+    }
+    return DropdownButtonFormField<String>(
+      // Rebuild when the selection or tank list changes elsewhere.
+      key: ValueKey(
+          '${tank.id}|${app.tanks.map((t) => t.name).join('|')}'),
+      initialValue: tank.id,
+      isExpanded: true,
+      style: theme.textTheme.titleMedium
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      decoration: InputDecoration(
+        labelText: context.tr('chooseTank'),
+        prefixIcon: const Icon(Icons.propane_tank_outlined, size: 28),
+      ),
+      items: [
+        for (final t in app.tanks)
+          DropdownMenuItem(
+            value: t.id,
+            child: Text(
+              '${app.tankDisplayName(t)} · ${formatLitres(t.capacityLitres)} ${context.tr('unitLitres')}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (id) {
+        if (id != null) app.selectTank(id);
+      },
     );
   }
 }

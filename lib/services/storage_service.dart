@@ -2,14 +2,16 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/day_savings.dart';
+import '../models/daily_record.dart';
 import '../models/fixture.dart';
 import '../models/flow_record.dart';
+import '../models/leak.dart';
 import '../models/meter_test.dart';
 import '../models/motor_session.dart';
+import '../models/tank_profile.dart';
 import '../models/user_settings.dart';
 
-/// Formats a date as yyyy-MM-dd (local time), used as the dailySavings key.
+/// Formats a date as yyyy-MM-dd (local time), used as the daily record key.
 String dateKey(DateTime date) {
   final y = date.year.toString().padLeft(4, '0');
   final m = date.month.toString().padLeft(2, '0');
@@ -24,35 +26,42 @@ class StorageService {
 
   final SharedPreferencesWithCache _prefs;
 
-  // Storage keys (see CLAUDE.md "Data").
   static const kOnboardingDone = 'onboardingDone';
   static const kPermissionsAsked = 'permissionsAsked';
   static const kSettings = 'settings';
-  static const kFillTime = 'fillTime';
-  static const kFillCount = 'fillCount';
+  static const kTanks = 'tanks';
   static const kActiveMotorSession = 'activeMotorSession';
   static const kFixtures = 'fixtures';
-  static const kDailySavings = 'dailySavings';
+  static const kDailyRecords = 'dailyRecords';
   static const kFlowHistory = 'flowHistory';
+  static const kLeaks = 'leaks';
   static const kChallengeStreak = 'challengeStreak';
   static const kLastChallengeDate = 'lastChallengeDate';
   static const kBadges = 'badges';
   static const kMeterTest = 'meterTest';
 
+  // Keys from the first version, read once for migration.
+  static const kLegacyFillTime = 'fillTime';
+  static const kLegacyFillCount = 'fillCount';
+  static const kLegacyDailySavings = 'dailySavings';
+
   static const allKeys = <String>{
     kOnboardingDone,
     kPermissionsAsked,
     kSettings,
-    kFillTime,
-    kFillCount,
+    kTanks,
     kActiveMotorSession,
     kFixtures,
-    kDailySavings,
+    kDailyRecords,
     kFlowHistory,
+    kLeaks,
     kChallengeStreak,
     kLastChallengeDate,
     kBadges,
     kMeterTest,
+    kLegacyFillTime,
+    kLegacyFillCount,
+    kLegacyDailySavings,
   };
 
   /// Keep at most this many flow history entries.
@@ -62,7 +71,9 @@ class StorageService {
     final prefs = await SharedPreferencesWithCache.create(
       cacheOptions: const SharedPreferencesWithCacheOptions(allowList: allKeys),
     );
-    return StorageService(prefs);
+    final storage = StorageService(prefs);
+    await storage._migrate();
+    return storage;
   }
 
   // ---------- JSON helpers (never throw on corrupt data) ----------
@@ -80,7 +91,57 @@ class StorageService {
   Future<void> _writeJson(String key, Object? value) =>
       _prefs.setString(key, jsonEncode(value));
 
-  // ---------- Onboarding ----------
+  List<T> _readList<T>(String key, T Function(Map<String, dynamic>) parse) {
+    final json = _readJson(key);
+    if (json is! List) return [];
+    final result = <T>[];
+    for (final item in json) {
+      try {
+        result.add(parse(item as Map<String, dynamic>));
+      } catch (_) {
+        // Skip corrupt entries.
+      }
+    }
+    return result;
+  }
+
+  // ---------- Migration from the single-tank version ----------
+
+  Future<void> _migrate() async {
+    // Old single fill time → first tank.
+    final legacyFill = _prefs.getDouble(kLegacyFillTime);
+    if (_readJson(kTanks) == null && (isOnboarded || legacyFill != null)) {
+      final raw = _readJson(kSettings);
+      final settings = loadSettings();
+      final capacity = raw is Map && raw['tankCapacityLitres'] is num
+          ? (raw['tankCapacityLitres'] as num).toDouble()
+          : UserSettings.defaultTankCapacity;
+      await saveTanks([
+        TankProfile(
+          id: 'tank1',
+          name: '', // shown as the translated default tank name
+          capacityLitres: capacity,
+          motorHp: settings.defaultMotorHp,
+          overflowMinutes: settings.defaultOverflowMinutes,
+          fillTimeSeconds: legacyFill,
+          fillCount: _prefs.getInt(kLegacyFillCount) ?? (legacyFill == null ? 0 : 1),
+          isDefault: true,
+        ),
+      ]);
+    }
+    await _prefs.remove(kLegacyFillTime);
+    await _prefs.remove(kLegacyFillCount);
+
+    // Old savings-only records → daily records.
+    final legacySavings = _readJson(kLegacyDailySavings);
+    if (legacySavings is Map<String, dynamic> &&
+        _readJson(kDailyRecords) == null) {
+      await _writeJson(kDailyRecords, legacySavings);
+    }
+    await _prefs.remove(kLegacyDailySavings);
+  }
+
+  // ---------- Onboarding & permissions ----------
 
   bool get isOnboarded => _prefs.getBool(kOnboardingDone) ?? false;
 
@@ -104,22 +165,12 @@ class StorageService {
   Future<void> saveSettings(UserSettings settings) =>
       _writeJson(kSettings, settings.toJson());
 
-  // ---------- Motor calibration ----------
+  // ---------- Tanks ----------
 
-  /// Seconds to fill the tank from empty, or null if not calibrated yet.
-  double? get fillTime => _prefs.getDouble(kFillTime);
+  List<TankProfile> loadTanks() => _readList(kTanks, TankProfile.fromJson);
 
-  int get fillCount => _prefs.getInt(kFillCount) ?? 0;
-
-  Future<void> saveCalibration(double fillTimeSeconds, int count) async {
-    await _prefs.setDouble(kFillTime, fillTimeSeconds);
-    await _prefs.setInt(kFillCount, count);
-  }
-
-  Future<void> clearCalibration() async {
-    await _prefs.remove(kFillTime);
-    await _prefs.remove(kFillCount);
-  }
+  Future<void> saveTanks(List<TankProfile> tanks) =>
+      _writeJson(kTanks, tanks.map((t) => t.toJson()).toList());
 
   // ---------- Active motor session ----------
 
@@ -138,65 +189,39 @@ class StorageService {
 
   Future<void> clearMotorSession() => _prefs.remove(kActiveMotorSession);
 
-  // ---------- Fixtures ----------
+  // ---------- Fixtures (taps) ----------
 
-  List<Fixture> loadFixtures() {
-    final json = _readJson(kFixtures);
-    if (json is! List) return [];
-    final result = <Fixture>[];
-    for (final item in json) {
-      try {
-        result.add(Fixture.fromJson(item as Map<String, dynamic>));
-      } catch (_) {
-        // Skip corrupt entries.
-      }
-    }
-    return result;
-  }
+  List<Fixture> loadFixtures() => _readList(kFixtures, Fixture.fromJson);
 
   Future<void> saveFixtures(List<Fixture> fixtures) =>
       _writeJson(kFixtures, fixtures.map((f) => f.toJson()).toList());
 
-  // ---------- Daily savings ----------
+  // ---------- Daily records ----------
 
-  Map<String, DaySavings> loadDailySavings() {
-    final json = _readJson(kDailySavings);
+  Map<String, DailyRecord> loadDailyRecords() {
+    final json = _readJson(kDailyRecords);
     if (json is! Map<String, dynamic>) return {};
-    final result = <String, DaySavings>{};
+    final result = <String, DailyRecord>{};
     json.forEach((key, value) {
       if (value is Map<String, dynamic>) {
-        result[key] = DaySavings.fromJson(value);
+        result[key] = DailyRecord.fromJson(value);
       }
     });
     return result;
   }
 
-  /// Adds [amount] to the record for [day] (defaults to today).
-  Future<void> addSavings(DaySavings amount, {DateTime? day}) async {
-    final all = loadDailySavings();
-    final key = dateKey(day ?? DateTime.now());
-    all[key] = (all[key] ?? const DaySavings()) + amount;
-    await _writeJson(
-      kDailySavings,
-      all.map((k, v) => MapEntry(k, v.toJson())),
-    );
+  /// Adds [amount] to the record for [day].
+  Future<void> addToRecord(DailyRecord amount, {required DateTime day}) async {
+    final all = loadDailyRecords();
+    final key = dateKey(day);
+    all[key] = (all[key] ?? const DailyRecord()) + amount;
+    await _writeJson(kDailyRecords, all.map((k, v) => MapEntry(k, v.toJson())));
   }
 
   // ---------- Flow history ----------
 
-  List<FlowRecord> loadFlowHistory() {
-    final json = _readJson(kFlowHistory);
-    if (json is! List) return [];
-    final result = <FlowRecord>[];
-    for (final item in json) {
-      try {
-        result.add(FlowRecord.fromJson(item as Map<String, dynamic>));
-      } catch (_) {
-        // Skip corrupt entries.
-      }
-    }
-    return result;
-  }
+  List<FlowRecord> loadFlowHistory() =>
+      _readList(kFlowHistory, FlowRecord.fromJson);
 
   /// Newest first; trimmed to [maxFlowHistory].
   Future<void> addFlowRecord(FlowRecord record) async {
@@ -204,6 +229,13 @@ class StorageService {
     final trimmed = list.take(maxFlowHistory).map((r) => r.toJson()).toList();
     await _writeJson(kFlowHistory, trimmed);
   }
+
+  // ---------- Leaks ----------
+
+  List<Leak> loadLeaks() => _readList(kLeaks, Leak.fromJson);
+
+  Future<void> saveLeaks(List<Leak> leaks) =>
+      _writeJson(kLeaks, leaks.map((l) => l.toJson()).toList());
 
   // ---------- Challenges ----------
 

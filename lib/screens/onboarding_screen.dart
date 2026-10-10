@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../models/tank_profile.dart';
 import '../models/user_settings.dart';
+import '../services/calc_service.dart' as calc;
 import '../theme/app_theme.dart';
 import '../widgets/app_scope.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/number_field.dart';
+import '../widgets/pickers.dart';
 
 /// First-launch flow: 3 swipe pages explaining the app, then the setup form.
 class OnboardingScreen extends StatefulWidget {
@@ -190,22 +193,25 @@ class _SetupForm extends StatefulWidget {
 
 class _SetupFormState extends State<_SetupForm> {
   final _formKey = GlobalKey<FormState>();
-  final _tank = TextEditingController(
+  final _people =
+      TextEditingController(text: '${UserSettings.defaultPeople}');
+  final _tankName = TextEditingController();
+  final _capacity = TextEditingController(
       text: formatNumber(UserSettings.defaultTankCapacity));
-  final _hp =
-      TextEditingController(text: formatNumber(UserSettings.defaultMotorHp));
+  final _hp = TextEditingController(text: formatNumber(UserSettings.defaultHp));
   final _rate = TextEditingController(
       text: formatNumber(UserSettings.defaultElectricityRate));
-  final _overflow = TextEditingController(
-      text: formatNumber(UserSettings.defaultOverflowMinutes));
+  final _overflow =
+      TextEditingController(text: formatNumber(UserSettings.defaultOverflow));
+  AreaType _area = AreaType.city;
+  TankMaterial _material = TankMaterial.plastic;
   bool _saving = false;
 
   @override
   void dispose() {
-    _tank.dispose();
-    _hp.dispose();
-    _rate.dispose();
-    _overflow.dispose();
+    for (final c in [_people, _tankName, _capacity, _hp, _rate, _overflow]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -214,19 +220,33 @@ class _SetupFormState extends State<_SetupForm> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
     final app = context.app;
+    final hp = double.parse(_hp.text.trim());
+    final overflow = double.parse(_overflow.text.trim());
+    final tank = app.newTankTemplate().copyWith(
+          name: _tankName.text.trim(),
+          material: _material,
+          capacityLitres: double.parse(_capacity.text.trim()),
+          motorHp: hp,
+          overflowMinutes: overflow,
+          cleaningIntervalDays: calc.defaultCleaningIntervalDays(_material),
+          isDefault: true,
+        );
     await app.completeOnboarding(
       app.settings.copyWith(
-        tankCapacityLitres: double.parse(_tank.text.trim()),
-        motorHp: double.parse(_hp.text.trim()),
+        peopleCount: int.parse(_people.text.trim()),
+        areaType: _area,
         electricityRate: double.parse(_rate.text.trim()),
-        overflowMinutes: double.parse(_overflow.text.trim()),
+        defaultMotorHp: hp,
+        defaultOverflowMinutes: overflow,
       ),
+      tank,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    const gap = SizedBox(height: 20);
     return Form(
       key: _formKey,
       child: ListView(
@@ -236,15 +256,49 @@ class _SetupFormState extends State<_SetupForm> {
           const SizedBox(height: 4),
           Text(context.tr('setupSubtitle'), style: theme.textTheme.bodyLarge),
           const SizedBox(height: 24),
+
+          // ---- Home
+          Text(context.tr('yourHome'), style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
           NumberField(
-            controller: _tank,
+            controller: _people,
+            label: context.tr('peopleAtHome'),
+            icon: Icons.groups_outlined,
+            max: 50,
+            wholeNumber: true,
+          ),
+          gap,
+          AreaPicker(value: _area, onChanged: (a) => setState(() => _area = a)),
+          const SizedBox(height: 28),
+
+          // ---- First tank
+          Text(context.tr('firstTank'), style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankName,
+            style: theme.textTheme.titleMedium,
+            maxLength: 30,
+            decoration: InputDecoration(
+              labelText: context.tr('tankName'),
+              hintText: context.tr('defaultTankName'),
+              prefixIcon: const Icon(Icons.label_outline, size: 28),
+            ),
+          ),
+          const SizedBox(height: 8),
+          MaterialDropdown(
+            value: _material,
+            onChanged: (m) => setState(() => _material = m),
+          ),
+          gap,
+          NumberField(
+            controller: _capacity,
             label: context.tr('tankCapacity'),
             helper: context.tr('tankCapacityHelp'),
             suffix: context.tr('unitLitres'),
             icon: Icons.propane_tank_outlined,
             max: 100000,
           ),
-          const SizedBox(height: 20),
+          gap,
           NumberField(
             controller: _hp,
             label: context.tr('motorHp'),
@@ -253,16 +307,7 @@ class _SetupFormState extends State<_SetupForm> {
             icon: Icons.electric_bolt_outlined,
             max: 20,
           ),
-          const SizedBox(height: 20),
-          NumberField(
-            controller: _rate,
-            label: context.tr('electricityRate'),
-            helper: context.tr('electricityRateHelp'),
-            suffix: context.tr('unitRupeesPerUnit'),
-            icon: Icons.currency_rupee,
-            max: 100,
-          ),
-          const SizedBox(height: 20),
+          gap,
           NumberField(
             controller: _overflow,
             label: context.tr('overflowMinutes'),
@@ -270,6 +315,15 @@ class _SetupFormState extends State<_SetupForm> {
             suffix: context.tr('unitMinutes'),
             icon: Icons.timer_outlined,
             max: 240,
+          ),
+          gap,
+          NumberField(
+            controller: _rate,
+            label: context.tr('electricityRate'),
+            helper: context.tr('electricityRateHelp'),
+            suffix: context.tr('unitRupeesPerUnit'),
+            icon: Icons.currency_rupee,
+            max: 100,
             textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 32),

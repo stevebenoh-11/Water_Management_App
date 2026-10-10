@@ -7,6 +7,7 @@ class MotorSession {
     required this.endTime,
     this.demoMode = false,
     this.isCalibration = false,
+    this.tankId = '',
   });
 
   /// When the motor was switched on.
@@ -24,12 +25,16 @@ class MotorSession {
   /// True while calibrating (empty tank, end time unknown).
   final bool isCalibration;
 
+  /// Which tank is being filled.
+  final String tankId;
+
   Map<String, dynamic> toJson() => {
         'startTime': startTime.toIso8601String(),
         'level': level,
         'endTime': endTime.toIso8601String(),
         'demoMode': demoMode,
         'isCalibration': isCalibration,
+        'tankId': tankId,
       };
 
   factory MotorSession.fromJson(Map<String, dynamic> json) => MotorSession(
@@ -38,5 +43,6 @@ class MotorSession {
         endTime: DateTime.parse(json['endTime'] as String),
         demoMode: json['demoMode'] == true,
         isCalibration: json['isCalibration'] == true,
+        tankId: json['tankId'] as String? ?? '',
       );
 }

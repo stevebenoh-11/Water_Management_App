@@ -2,7 +2,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jalmitra/l10n/app_strings.dart';
+import 'package:jalmitra/l10n/tips.dart';
 import 'package:jalmitra/models/challenge.dart';
+import 'package:jalmitra/models/tank_profile.dart';
+import 'package:jalmitra/models/user_settings.dart';
+import 'package:jalmitra/widgets/tank_labels.dart';
 
 void main() {
   final en = AppStrings.values['en']!;
@@ -39,9 +43,10 @@ void main() {
     // Literal keys passed to tr('...') or s.get('...'), plus keys stored in
     // `key:` / `title:` / `body:` records and step/tip lists.
     final patterns = [
-      RegExp(r"""tr\(\s*'([A-Za-z0-9]+)'"""),
-      RegExp(r"""\.get\('([A-Za-z0-9]+)'"""),
-      RegExp(r"""(?:key|title|body): '([A-Za-z0-9]+)'"""),
+      RegExp(r"""tr\(\s*'([A-Za-z0-9_]+)'"""),
+      RegExp(r"""\.get\('([A-Za-z0-9_]+)'"""),
+      RegExp(r"""(?:key|title|body): '([A-Za-z0-9_]+)'"""),
+      RegExp(r"""\(\s*Icons\.\w+,\s*[\w.]+,\s*'([A-Za-z0-9_]+)'"""),
       RegExp(r"""'((?:calibrateStep|leakTip)\d)'"""),
     ];
     final used = <String>{};
@@ -56,6 +61,12 @@ void main() {
     // Dynamic families.
     used.addAll([for (var d = 1; d <= 7; d++) 'day$d']);
     used.addAll(['badge3', 'badge7', 'badge30', 'am', 'pm']);
+    used.addAll([for (var m = 1; m <= 12; m++) 'month$m']);
+    used.addAll(['usedLeftBar', 'wastedRightBar', 'editTank', 'addTank']);
+    used.addAll(TankType.values.map(tankTypeKey));
+    used.addAll(TankMaterial.values.map(tankMaterialKey));
+    used.addAll(TankShape.values.map(tankShapeKey));
+    used.addAll(AreaType.values.map(areaKey));
     used.addAll(allChallenges.map((c) => c.textKey));
 
     final missing = used.where((k) => !en.containsKey(k)).toList()..sort();
@@ -66,6 +77,14 @@ void main() {
     expect(allChallenges.length, 30);
     expect(allChallenges.map((c) => c.id).toSet().length, 30);
     expect(allChallenges.every((c) => c.litres > 0), isTrue);
+  });
+
+  test('at least 60 tips, each in English and Tamil, no duplicates', () {
+    expect(allTips.length, greaterThanOrEqualTo(60));
+    expect(allTips.every((t) => t.en.trim().isNotEmpty && t.ta.trim().isNotEmpty),
+        isTrue);
+    expect(allTips.map((t) => t.en).toSet().length, allTips.length);
+    expect(allTips.map((t) => t.ta).toSet().length, allTips.length);
   });
 
   test('get() replaces placeholders and falls back sensibly', () {

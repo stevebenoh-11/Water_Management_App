@@ -5,12 +5,14 @@ import 'app_scope.dart';
 
 /// Validates a positive number. Returns a strings-file key for the error,
 /// or null if valid. Kept pure so it can be unit-tested.
-String? positiveNumberError(String? input, {double? max}) {
+String? positiveNumberError(String? input,
+    {double? max, bool wholeNumber = false}) {
   final text = input?.trim() ?? '';
   if (text.isEmpty) return 'errEmpty';
   final value = double.tryParse(text);
   if (value == null || !value.isFinite) return 'errNotNumber';
   if (value <= 0) return 'errPositive';
+  if (wholeNumber && value != value.roundToDouble()) return 'errWholeNumber';
   if (max != null && value > max) return 'errTooLarge';
   return null;
 }
@@ -29,6 +31,9 @@ class NumberField extends StatelessWidget {
     this.helper,
     this.suffix,
     this.max,
+    this.wholeNumber = false,
+    this.optional = false,
+    this.onChanged,
     this.textInputAction = TextInputAction.next,
   });
 
@@ -38,6 +43,13 @@ class NumberField extends StatelessWidget {
   final String? helper;
   final String? suffix;
   final double? max;
+
+  /// Only whole numbers (e.g. number of people).
+  final bool wholeNumber;
+
+  /// Empty is allowed (means "use the default").
+  final bool optional;
+  final ValueChanged<String>? onChanged;
   final TextInputAction textInputAction;
 
   @override
@@ -45,13 +57,15 @@ class NumberField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       style: Theme.of(context).textTheme.titleMedium,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: TextInputType.numberWithOptions(decimal: !wholeNumber),
       textInputAction: textInputAction,
       inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        FilteringTextInputFormatter.allow(
+            wholeNumber ? RegExp(r'[0-9]') : RegExp(r'[0-9.]')),
         LengthLimitingTextInputFormatter(8),
       ],
       autovalidateMode: AutovalidateMode.onUserInteraction,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         helperText: helper,
@@ -59,7 +73,9 @@ class NumberField extends StatelessWidget {
         suffixText: suffix,
       ),
       validator: (value) {
-        final key = positiveNumberError(value, max: max);
+        if (optional && (value ?? '').trim().isEmpty) return null;
+        final key =
+            positiveNumberError(value, max: max, wholeNumber: wholeNumber);
         if (key == null) return null;
         return context.tr(key, {'max': max == null ? '' : formatNumber(max!)});
       },

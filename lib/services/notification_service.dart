@@ -16,8 +16,13 @@ class NotificationService {
   static const motorAlarmId = 1;
   static const meterReminderId = 2;
 
+  /// Tip notifications use ids 100 … 100 + tipDaysAhead − 1.
+  static const tipBaseId = 100;
+  static const tipDaysAhead = 14;
+
   static const _motorChannelId = 'motor_alarm_v1';
   static const _reminderChannelId = 'reminders_v1';
+  static const _tipChannelId = 'tips_v1';
 
   /// Android FLAG_INSISTENT: the alarm sound repeats until the user
   /// opens or dismisses the notification.
@@ -81,7 +86,7 @@ class NotificationService {
           enableVibration: true,
           vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
           additionalFlags: Int32List.fromList([_flagInsistent]),
-          ticker: s.get('alarmTitle'),
+          ticker: s.get('alarmBody'),
         ),
       );
 
@@ -123,11 +128,13 @@ class NotificationService {
     );
   }
 
-  /// "Your tank is almost full! Switch off the motor now."
-  Future<void> scheduleMotorAlarm(DateTime when, AppStrings s) => _schedule(
+  /// "Overhead tank: almost full! Switch off the motor now."
+  Future<void> scheduleMotorAlarm(
+          DateTime when, AppStrings s, String tankName) =>
+      _schedule(
         id: motorAlarmId,
         when: when,
-        title: s.get('alarmTitle'),
+        title: s.get('alarmTitle', {'tank': tankName}),
         body: s.get('alarmBody'),
         details: _motorDetails(s),
       );
@@ -149,6 +156,42 @@ class NotificationService {
   Future<void> cancelMeterReminder() async {
     await init();
     await _plugin.cancel(id: meterReminderId);
+  }
+
+  NotificationDetails _tipDetails(AppStrings s) => NotificationDetails(
+        android: AndroidNotificationDetails(
+          _tipChannelId,
+          s.get('channelTipName'),
+          channelDescription: s.get('channelTipDesc'),
+          icon: 'ic_stat_water',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+      );
+
+  /// Schedules one morning tip per day (each day has its own tip text, so
+  /// they are scheduled individually and refreshed every time the app opens).
+  Future<void> scheduleTips(
+      List<({DateTime when, String body})> tips, AppStrings s) async {
+    await cancelTips();
+    for (var i = 0; i < tips.length && i < tipDaysAhead; i++) {
+      final tip = tips[i];
+      if (!tip.when.isAfter(DateTime.now())) continue;
+      await _schedule(
+        id: tipBaseId + i,
+        when: tip.when,
+        title: s.get('tipOfTheDay'),
+        body: tip.body,
+        details: _tipDetails(s),
+      );
+    }
+  }
+
+  Future<void> cancelTips() async {
+    await init();
+    for (var i = 0; i < tipDaysAhead; i++) {
+      await _plugin.cancel(id: tipBaseId + i);
+    }
   }
 
   Future<void> cancelAll() async {
