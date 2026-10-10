@@ -1,160 +1,249 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/user_settings.dart';
-import '../models/motor_session.dart';
+
+import '../models/day_savings.dart';
 import '../models/fixture.dart';
-import '../models/daily_savings.dart';
+import '../models/flow_record.dart';
 import '../models/meter_test.dart';
+import '../models/motor_session.dart';
+import '../models/user_settings.dart';
 
+/// Formats a date as yyyy-MM-dd (local time), used as the dailySavings key.
+String dateKey(DateTime date) {
+  final y = date.year.toString().padLeft(4, '0');
+  final m = date.month.toString().padLeft(2, '0');
+  final d = date.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
+/// All app data lives here, stored locally as JSON in shared_preferences.
+/// Nothing ever leaves the phone.
 class StorageService {
-  static const String _keySettings = 'user_settings';
-  static const String _keyFillTime = 'fill_time';
-  static const String _keyFillCount = 'fill_count';
-  static const String _keyMotorSession = 'active_motor_session';
-  static const String _keyFixtures = 'fixtures';
-  static const String _keyDailySavings = 'daily_savings';
-  static const String _keyChallengeStreak = 'challenge_streak';
-  static const String _keyLastChallengeDate = 'last_challenge_date';
-  static const String _keyBadges = 'badges';
-  static const String _keyMeterTest = 'meter_test';
+  StorageService(this._prefs);
 
-  final SharedPreferences prefs;
+  final SharedPreferencesWithCache _prefs;
 
-  StorageService(this.prefs);
+  // Storage keys (see CLAUDE.md "Data").
+  static const kOnboardingDone = 'onboardingDone';
+  static const kPermissionsAsked = 'permissionsAsked';
+  static const kSettings = 'settings';
+  static const kFillTime = 'fillTime';
+  static const kFillCount = 'fillCount';
+  static const kActiveMotorSession = 'activeMotorSession';
+  static const kFixtures = 'fixtures';
+  static const kDailySavings = 'dailySavings';
+  static const kFlowHistory = 'flowHistory';
+  static const kChallengeStreak = 'challengeStreak';
+  static const kLastChallengeDate = 'lastChallengeDate';
+  static const kBadges = 'badges';
+  static const kMeterTest = 'meterTest';
 
-  static Future<StorageService> getInstance() async {
-    final SharedPreferences sp = await SharedPreferences.getInstance();
-    return StorageService(sp);
-  }
+  static const allKeys = <String>{
+    kOnboardingDone,
+    kPermissionsAsked,
+    kSettings,
+    kFillTime,
+    kFillCount,
+    kActiveMotorSession,
+    kFixtures,
+    kDailySavings,
+    kFlowHistory,
+    kChallengeStreak,
+    kLastChallengeDate,
+    kBadges,
+    kMeterTest,
+  };
 
-  // User Settings
-  UserSettings getUserSettings() {
-    final String? raw = prefs.getString(_keySettings);
-    if (raw == null) return UserSettings();
-    try {
-      return UserSettings.fromJson(raw);
-    } catch (_) {
-      return UserSettings();
-    }
-  }
+  /// Keep at most this many flow history entries.
+  static const maxFlowHistory = 100;
 
-  Future<bool> saveUserSettings(UserSettings settings) async {
-    return await prefs.setString(_keySettings, settings.toJson());
-  }
-
-  // Motor Calibration
-  double? getFillTime() => prefs.getDouble(_keyFillTime);
-  int getFillCount() => prefs.getInt(_keyFillCount) ?? 0;
-
-  Future<void> saveMotorCalibration(double fillTime, int fillCount) async {
-    await prefs.setDouble(_keyFillTime, fillTime);
-    await prefs.setInt(_keyFillCount, fillCount);
-  }
-
-  // Active Motor Session
-  MotorSession? getActiveMotorSession() {
-    final String? raw = prefs.getString(_keyMotorSession);
-    if (raw == null) return null;
-    try {
-      return MotorSession.fromJson(raw);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<bool> saveActiveMotorSession(MotorSession? session) async {
-    if (session == null) {
-      return await prefs.remove(_keyMotorSession);
-    }
-    return await prefs.setString(_keyMotorSession, session.toJson());
-  }
-
-  // Fixtures
-  List<Fixture> getFixtures() {
-    final List<String>? rawList = prefs.getStringList(_keyFixtures);
-    if (rawList == null || rawList.isEmpty) {
-      return [
-        Fixture(id: 'shower', name: 'Bathroom Shower', flowRateLps: 0.15),
-        Fixture(id: 'kitchen_tap', name: 'Kitchen Tap', flowRateLps: 0.10),
-      ];
-    }
-    return rawList.map((e) => Fixture.fromJson(e)).toList();
-  }
-
-  Future<bool> saveFixtures(List<Fixture> fixtures) async {
-    final List<String> rawList = fixtures.map((e) => e.toJson()).toList();
-    return await prefs.setStringList(_keyFixtures, rawList);
-  }
-
-  // Daily Savings
-  Map<String, DailySavings> getDailySavingsMap() {
-    final String? raw = prefs.getString(_keyDailySavings);
-    if (raw == null) return {};
-    try {
-      final Map<String, dynamic> map = json.decode(raw);
-      return map.map((key, value) => MapEntry(key, DailySavings.fromMap(value)));
-    } catch (_) {
-      return {};
-    }
-  }
-
-  Future<void> addSavings({
-    required double litres,
-    required double kwh,
-    required double rupees,
-    String? dateStr,
-  }) async {
-    final String dateKey = dateStr ?? DateTime.now().toIso8601String().substring(0, 10);
-    final Map<String, DailySavings> currentMap = getDailySavingsMap();
-    final DailySavings existing = currentMap[dateKey] ??
-        DailySavings(date: dateKey, litres: 0.0, kwh: 0.0, rupees: 0.0);
-
-    final DailySavings updated = DailySavings(
-      date: dateKey,
-      litres: existing.litres + litres,
-      kwh: existing.kwh + kwh,
-      rupees: existing.rupees + rupees,
+  static Future<StorageService> create() async {
+    final prefs = await SharedPreferencesWithCache.create(
+      cacheOptions: const SharedPreferencesWithCacheOptions(allowList: allKeys),
     );
-    currentMap[dateKey] = updated;
-
-    final Map<String, dynamic> rawMap =
-        currentMap.map((key, value) => MapEntry(key, value.toMap()));
-    await prefs.setString(_keyDailySavings, json.encode(rawMap));
+    return StorageService(prefs);
   }
 
-  // Challenges & Streaks
-  int getChallengeStreak() => prefs.getInt(_keyChallengeStreak) ?? 0;
-  String? getLastChallengeDate() => prefs.getString(_keyLastChallengeDate);
-  List<String> getBadges() => prefs.getStringList(_keyBadges) ?? [];
+  // ---------- JSON helpers (never throw on corrupt data) ----------
 
-  Future<void> saveChallengeCompletion({
-    required int streak,
-    required String dateStr,
-    required List<String> badges,
-  }) async {
-    await prefs.setInt(_keyChallengeStreak, streak);
-    await prefs.setString(_keyLastChallengeDate, dateStr);
-    await prefs.setStringList(_keyBadges, badges);
-  }
-
-  // Meter Test Record
-  MeterTestRecord? getMeterTestRecord() {
-    final String? raw = prefs.getString(_keyMeterTest);
+  Object? _readJson(String key) {
+    final raw = _prefs.getString(key);
     if (raw == null) return null;
     try {
-      return MeterTestRecord.fromJson(raw);
+      return jsonDecode(raw);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> _writeJson(String key, Object? value) =>
+      _prefs.setString(key, jsonEncode(value));
+
+  // ---------- Onboarding ----------
+
+  bool get isOnboarded => _prefs.getBool(kOnboardingDone) ?? false;
+
+  Future<void> setOnboarded(bool value) =>
+      _prefs.setBool(kOnboardingDone, value);
+
+  /// Whether the polite permission explanation has been shown once.
+  bool get permissionsAsked => _prefs.getBool(kPermissionsAsked) ?? false;
+
+  Future<void> setPermissionsAsked(bool value) =>
+      _prefs.setBool(kPermissionsAsked, value);
+
+  // ---------- Settings ----------
+
+  UserSettings loadSettings() {
+    final json = _readJson(kSettings);
+    if (json is Map<String, dynamic>) return UserSettings.fromJson(json);
+    return const UserSettings();
+  }
+
+  Future<void> saveSettings(UserSettings settings) =>
+      _writeJson(kSettings, settings.toJson());
+
+  // ---------- Motor calibration ----------
+
+  /// Seconds to fill the tank from empty, or null if not calibrated yet.
+  double? get fillTime => _prefs.getDouble(kFillTime);
+
+  int get fillCount => _prefs.getInt(kFillCount) ?? 0;
+
+  Future<void> saveCalibration(double fillTimeSeconds, int count) async {
+    await _prefs.setDouble(kFillTime, fillTimeSeconds);
+    await _prefs.setInt(kFillCount, count);
+  }
+
+  Future<void> clearCalibration() async {
+    await _prefs.remove(kFillTime);
+    await _prefs.remove(kFillCount);
+  }
+
+  // ---------- Active motor session ----------
+
+  MotorSession? loadMotorSession() {
+    final json = _readJson(kActiveMotorSession);
+    if (json is! Map<String, dynamic>) return null;
+    try {
+      return MotorSession.fromJson(json);
     } catch (_) {
       return null;
     }
   }
 
-  Future<bool> saveMeterTestRecord(MeterTestRecord? record) async {
-    if (record == null) return await prefs.remove(_keyMeterTest);
-    return await prefs.setString(_keyMeterTest, record.toJson());
+  Future<void> saveMotorSession(MotorSession session) =>
+      _writeJson(kActiveMotorSession, session.toJson());
+
+  Future<void> clearMotorSession() => _prefs.remove(kActiveMotorSession);
+
+  // ---------- Fixtures ----------
+
+  List<Fixture> loadFixtures() {
+    final json = _readJson(kFixtures);
+    if (json is! List) return [];
+    final result = <Fixture>[];
+    for (final item in json) {
+      try {
+        result.add(Fixture.fromJson(item as Map<String, dynamic>));
+      } catch (_) {
+        // Skip corrupt entries.
+      }
+    }
+    return result;
   }
 
-  // Clear all data
-  Future<bool> clearAll() async {
-    return await prefs.clear();
+  Future<void> saveFixtures(List<Fixture> fixtures) =>
+      _writeJson(kFixtures, fixtures.map((f) => f.toJson()).toList());
+
+  // ---------- Daily savings ----------
+
+  Map<String, DaySavings> loadDailySavings() {
+    final json = _readJson(kDailySavings);
+    if (json is! Map<String, dynamic>) return {};
+    final result = <String, DaySavings>{};
+    json.forEach((key, value) {
+      if (value is Map<String, dynamic>) {
+        result[key] = DaySavings.fromJson(value);
+      }
+    });
+    return result;
   }
+
+  /// Adds [amount] to the record for [day] (defaults to today).
+  Future<void> addSavings(DaySavings amount, {DateTime? day}) async {
+    final all = loadDailySavings();
+    final key = dateKey(day ?? DateTime.now());
+    all[key] = (all[key] ?? const DaySavings()) + amount;
+    await _writeJson(
+      kDailySavings,
+      all.map((k, v) => MapEntry(k, v.toJson())),
+    );
+  }
+
+  // ---------- Flow history ----------
+
+  List<FlowRecord> loadFlowHistory() {
+    final json = _readJson(kFlowHistory);
+    if (json is! List) return [];
+    final result = <FlowRecord>[];
+    for (final item in json) {
+      try {
+        result.add(FlowRecord.fromJson(item as Map<String, dynamic>));
+      } catch (_) {
+        // Skip corrupt entries.
+      }
+    }
+    return result;
+  }
+
+  /// Newest first; trimmed to [maxFlowHistory].
+  Future<void> addFlowRecord(FlowRecord record) async {
+    final list = [record, ...loadFlowHistory()];
+    final trimmed = list.take(maxFlowHistory).map((r) => r.toJson()).toList();
+    await _writeJson(kFlowHistory, trimmed);
+  }
+
+  // ---------- Challenges ----------
+
+  int get challengeStreak => _prefs.getInt(kChallengeStreak) ?? 0;
+
+  String? get lastChallengeDate => _prefs.getString(kLastChallengeDate);
+
+  Future<void> saveChallengeProgress(int streak, String lastDate) async {
+    await _prefs.setInt(kChallengeStreak, streak);
+    await _prefs.setString(kLastChallengeDate, lastDate);
+  }
+
+  /// Earned badge milestones in days, e.g. [3, 7].
+  List<int> loadBadges() {
+    final json = _readJson(kBadges);
+    if (json is! List) return [];
+    return json.whereType<num>().map((n) => n.toInt()).toList();
+  }
+
+  Future<void> saveBadges(List<int> badges) => _writeJson(kBadges, badges);
+
+  // ---------- Night meter test ----------
+
+  MeterTest? loadMeterTest() {
+    final json = _readJson(kMeterTest);
+    if (json is! Map<String, dynamic>) return null;
+    try {
+      return MeterTest.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveMeterTest(MeterTest test) =>
+      _writeJson(kMeterTest, test.toJson());
+
+  Future<void> clearMeterTest() => _prefs.remove(kMeterTest);
+
+  // ---------- Reset ----------
+
+  /// Deletes every stored value (Settings → Reset all data).
+  Future<void> resetAll() => _prefs.clear();
 }

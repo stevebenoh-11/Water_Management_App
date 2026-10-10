@@ -1,150 +1,667 @@
+/// Simple Map-based bilingual strings (English + Tamil).
+/// Every user-facing string in the app must come from here.
+///
+/// Usage: `context.tr('key')` or `context.tr('key', {'max': '5000'})`
+/// (see lib/widgets/app_scope.dart). Placeholders look like `{name}`.
+/// test/l10n_test.dart fails if a Tamil string is missing.
 class AppStrings {
-  static const Map<String, Map<String, String>> _localizedValues = {
-    'en': {
-      'app_name': 'JalMitra',
-      'app_tagline': 'Your Pocket Water Saver',
-      'onboarding_title_1': 'Never Overflow Your Tank',
-      'onboarding_desc_1': 'Set smart alarms based on your motor and tank level to prevent water and electricity waste.',
-      'onboarding_title_2': 'Track Tap & Shower Flow',
-      'onboarding_desc_2': 'Calibrate fixtures, set volume limits, and get real-time alerts before you use too much water.',
-      'onboarding_title_3': 'Detect Hidden Leaks',
-      'onboarding_desc_3': 'Calculate drip loss or test overnight meter readings to find hidden leaks effortlessly.',
-      'setup_title': 'Initial Setup',
-      'setup_subtitle': 'Enter your household water system details:',
-      'tank_capacity': 'Overhead Tank Capacity (Litres)',
-      'motor_hp': 'Motor Power (HP)',
-      'elec_rate': 'Electricity Cost (₹/kWh unit)',
-      'typical_overflow': 'Typical Overflow Before Noticed (Minutes)',
-      'get_started': 'Get Started',
-      'home': 'Home',
-      'motor_guard': 'Motor Guard',
-      'flow_timer': 'Flow Timer',
-      'leak_check': 'Leak Check',
-      'settings': 'Settings',
-      'challenges': 'Challenges',
-      'saved_this_week': 'This Week You Saved',
-      'motor_on': 'Motor ON',
-      'motor_running': 'Motor Running',
-      'today_challenge': 'Today\'s Water Challenge',
-      'streak': 'Streak',
-      'days': 'days',
-      'mark_done': 'Mark as Done',
-      'completed': 'Completed!',
-      'weekly_savings': 'Weekly Water Saved (Litres)',
-      'calibration_needed': 'Calibration Required',
-      'start_calibration': 'Start Motor Calibration',
-      'calib_instruction': 'Start with an empty tank. Turn motor ON and tap "Tank Full" when filled to calibrate motor speed.',
-      'tank_full': 'Tank Full',
-      'select_level': 'Select Current Water Level:',
-      'level_empty': 'Empty (0%)',
-      'level_quarter': '1/4 Full (25%)',
-      'level_half': 'Half Full (50%)',
-      'level_three_quarter': '3/4 Full (75%)',
-      'start_motor_timer': 'Start Motor Guard',
-      'stop_cancel': 'Cancel Alarm',
-      'demo_mode_badge': 'DEMO MODE (1m = 1s)',
-      'saved_popup_title': 'Great Water Saver!',
-      'saved_popup_body': 'You saved approximately {litres} L and ₹{rupees} today!',
-      'drip_calc': 'Drip Calculator',
-      'night_meter': 'Night Meter Test',
-      'tap_per_drip': 'Tap button for each drip during 10s countdown:',
-      'drips_count': 'Drips counted:',
-      'start_10s_test': 'Start 10s Test',
-      'tap_drip': 'TAP DRIP!',
-      'monthly_waste': 'This tap wastes {litres} L/month (≈ {buckets} buckets)',
-      'fixed_it': 'I Fixed It!',
-      'night_reading': 'Step 1: Night Reading (all taps closed)',
-      'morning_reading': 'Step 2: Morning Reading (before using water)',
-      'enter_reading': 'Enter reading:',
-      'save_night_reading': 'Save Night Reading',
-      'check_leak': 'Check for Leak',
-      'leak_found': 'Hidden leak likely! {litres} L lost overnight.',
-      'no_leak': 'No leak detected! ✅',
-      'unit_litres': 'Litres',
-      'unit_m3': 'm³',
-      'reset_data': 'Reset All Data',
-      'confirm_reset': 'Are you sure you want to reset all data?',
-      'cancel': 'Cancel',
-      'confirm': 'Confirm',
-      'language': 'Language',
-      'english': 'English',
-      'tamil': 'தமிழ்',
-      'demo_mode_setting': 'Demo Mode (Fast timing for testing)',
-    },
-    'ta': {
-      'app_name': 'ஜல்மித்ரா',
-      'app_tagline': 'உங்கள் பாக்கெட் நீர் சேமிப்பாளர்',
-      'onboarding_title_1': 'தொட்டி நிரம்பி வழிவதை தடுக்கவும்',
-      'onboarding_desc_1': 'மோட்டார் மற்றும் நீர் மட்டத்தின் அடிப்படையில் துல்லியமான அலாரம் அமைத்து நீர் விரயத்தை தவிர்க்கவும்.',
-      'onboarding_title_2': 'பயன்பாட்டு நேரத்தை கண்காணிக்கவும்',
-      'onboarding_desc_2': 'குழாய் நீர் பயன்பாட்டிற்கு வரம்பு அமைத்து அதிக நீர் விரயமாவதை தடுக்கவும்.',
-      'onboarding_title_3': 'கசிவுகளை கண்டறியவும்',
-      'onboarding_desc_3': 'சொட்டு நீர் விரயம் மற்றும் இரவு நேர மீட்டர் சோதனை மூலம் மறைமுக கசிவுகளை கண்டறியவும்.',
-      'setup_title': 'ஆரம்ப அமைப்பு',
-      'setup_subtitle': 'உங்கள் வீட்டு நீர் அமைப்பின் விவரங்களை உள்ளிடவும்:',
-      'tank_capacity': 'மேல்நிலை தொட்டி கொள்ளளவு (லிட்டர்)',
-      'motor_hp': 'மோட்டார் திறன் (HP)',
-      'elec_rate': 'மின்சாரக் கட்டணம் (₹/யூனிட்)',
-      'typical_overflow': 'சாதாரண வழிதல் நேரம் (நிமிடங்கள்)',
-      'get_started': 'தொடங்கவும்',
-      'home': 'முகப்பு',
-      'motor_guard': 'மோட்டார் காப்பாளர்',
-      'flow_timer': 'நீரப்போக்கு டைமர்',
-      'leak_check': 'கசிவு சோதனை',
-      'settings': 'அமைப்புகள்',
-      'challenges': 'சவால்கள்',
-      'saved_this_week': 'இந்த வாரம் நீங்கள் சேமித்தது',
-      'motor_on': 'மோட்டார் ஆன்',
-      'motor_running': 'மோட்டார் இயங்குகிறது',
-      'today_challenge': 'இன்றைய நீர் சேமிப்பு சவால்',
-      'streak': 'தொடர் நாட்கள்',
-      'days': 'நாட்கள்',
-      'mark_done': 'முடிந்தது',
-      'completed': 'முடிந்தது!',
-      'weekly_savings': 'வாராந்திர நீர் சேமிப்பு (லிட்டரில்)',
-      'calibration_needed': 'அளவீடு தேவை',
-      'start_calibration': 'அளவீடு தொடங்கவும்',
-      'calib_instruction': 'வெற்று தொட்டியுடன் தொடங்கவும். மோட்டாரை ஆன் செய்து தொட்டி நிரம்பியதும் "தொட்டி நிரம்பியது" என்பதை அழுத்தவும்.',
-      'tank_full': 'தொட்டி நிரம்பியது',
-      'select_level': 'தற்போதைய நீர் மட்டத்தை தேர்ந்தெடுக்கவும்:',
-      'level_empty': 'காலியாக (0%)',
-      'level_quarter': '1/4 பங்கு (25%)',
-      'level_half': 'பாதி (50%)',
-      'level_three_quarter': '3/4 பங்கு (75%)',
-      'start_motor_timer': 'மோட்டார் அலாரம் தொடங்கு',
-      'stop_cancel': 'அலாரத்தை ரத்து செய்',
-      'demo_mode_badge': 'டெமோ பயன்முறை (1 நிமி = 1 நொடி)',
-      'saved_popup_title': 'சிறந்த நீர் சேமிப்பு!',
-      'saved_popup_body': 'இன்று நீங்கள் சுமார் {litres} லிட்டர் நீர் மற்றும் ₹{rupees} சேமித்துள்ளீர்கள்!',
-      'drip_calc': 'சொட்டு நீர் கணிப்பான்',
-      'night_meter': 'இரவு மீட்டர் சோதனை',
-      'tap_per_drip': '10 வினாடி எண்ணலில் ஒவ்வொரு சொட்டுக்கும் பொத்தானை அழுத்தவும்:',
-      'drips_count': 'எண்ணப்பட்ட சொட்டுகள்:',
-      'start_10s_test': '10 வினாடி சோதனை தொடங்கு',
-      'tap_drip': 'சொட்டு!',
-      'monthly_waste': 'இந்த குழாய் மாதம் {litres} லிட்டர் வீணாக்குகிறது (≈ {buckets} வாலிகள்)',
-      'fixed_it': 'சரி செய்துவிட்டேன்!',
-      'night_reading': 'படி 1: இரவு அளவு (அனைத்து குழாய்களும் மூடப்பட்ட நிலை)',
-      'morning_reading': 'படி 2: காலை அளவு (நீர் பயன்படுத்தும் முன்)',
-      'enter_reading': 'அளவை உள்ளிடவும்:',
-      'save_night_reading': 'இரவு அளவை சேமிக்கவும்',
-      'check_leak': 'கசிவை சரிபார்க்கவும்',
-      'leak_found': 'மறைமுக கசிவு உள்ளது! இரவில் {litres} லிட்டர் விரயமானது.',
-      'no_leak': 'கசிவு ஏதும் இல்லை! ✅',
-      'unit_litres': 'லிட்டர்',
-      'unit_m3': 'மீட்டர்³',
-      'reset_data': 'அனைத்து தரவையும் மீட்டமைக்கவும்',
-      'confirm_reset': 'அனைத்து தரவையும் நிச்சயமாக நீக்க வேண்டுமா?',
-      'cancel': 'ரத்து',
-      'confirm': 'உறுதி செய்',
-      'language': 'மொழி',
-      'english': 'English',
-      'tamil': 'தமிழ்',
-      'demo_mode_setting': 'டெமோ பயன்முறை (வேகமான டைமர்)',
-    }
+  const AppStrings(this.languageCode);
+
+  final String languageCode;
+
+  static const supportedLanguages = ['en', 'ta'];
+
+  /// Returns the string for [key] in the current language, falling back to
+  /// English, then to the key itself. Replaces `{param}` placeholders.
+  String get(String key, [Map<String, String> params = const {}]) {
+    var text = values[languageCode]?[key] ?? values['en']?[key] ?? key;
+    params.forEach((name, value) {
+      text = text.replaceAll('{$name}', value);
+    });
+    return text;
+  }
+
+  static const Map<String, Map<String, String>> values = {
+    'en': _en,
+    'ta': _ta,
   };
 
-  static String get(String key, String lang) {
-    return _localizedValues[lang]?[key] ?? _localizedValues['en']?[key] ?? key;
-  }
+  // ===================================================================
+  // ENGLISH
+  // ===================================================================
+  static const Map<String, String> _en = {
+    // App
+    'appName': 'JalMitra',
+    'tagline': 'Your Pocket Water Saver',
+    'about': 'JalMitra v1.0 · Your Pocket Water Saver\n'
+        'Works fully offline. Your data never leaves this phone.',
+
+    // Navigation
+    'navHome': 'Home',
+    'navMotor': 'Motor Guard',
+    'navFlow': 'Flow Timer',
+    'navLeak': 'Leak Check',
+    'navSettings': 'Settings',
+
+    // Common
+    'next': 'Next',
+    'back': 'Back',
+    'skip': 'Skip',
+    'save': 'Save',
+    'cancel': 'Cancel',
+    'delete': 'Delete',
+    'ok': 'OK',
+    'start': 'Start',
+    'stop': 'Stop',
+    'done': 'Done',
+    'allow': 'Allow',
+    'notNow': 'Not now',
+    'today': 'Today',
+    'language': 'Language',
+    'languageEnglish': 'English',
+    'languageTamil': 'தமிழ்',
+    'am': 'AM',
+    'pm': 'PM',
+
+    // Units
+    'unitLitres': 'L',
+    'unitCubicMetres': 'm³',
+    'unitHp': 'HP',
+    'unitRupeesPerUnit': '₹/unit',
+    'unitRupees': '₹',
+    'unitKwh': 'kWh',
+    'unitHours': 'h',
+    'unitMinutes': 'min',
+    'unitSeconds': 's',
+
+    // Weekdays (DateTime.weekday: 1 = Monday)
+    'day1': 'Mon',
+    'day2': 'Tue',
+    'day3': 'Wed',
+    'day4': 'Thu',
+    'day5': 'Fri',
+    'day6': 'Sat',
+    'day7': 'Sun',
+
+    // Validation
+    'errEmpty': 'Please enter a value',
+    'errNotNumber': 'Please enter a valid number',
+    'errPositive': 'Must be more than 0',
+    'errTooLarge': 'Must be {max} or less',
+    'errWholeNumber': 'Please enter a whole number',
+    'errName': 'Please enter a name',
+    'errTooFast': 'Too fast to be right. Please measure again.',
+    'errMorningLower':
+        'Morning reading cannot be lower than the night reading',
+
+    // Onboarding
+    'onb1Title': 'Never let your tank overflow',
+    'onb1Body':
+        'Tell JalMitra when you switch on the motor. It learns how long your '
+            'tank takes to fill and rings an alarm before it overflows — even '
+            'when the app is closed.',
+    'onb2Title': 'Measure every litre',
+    'onb2Body':
+        'Time a 1-litre bottle at any tap or shower. JalMitra then shows the '
+            'litres you use, live, and warns you when you cross your limit.',
+    'onb3Title': 'Catch hidden leaks',
+    'onb3Body':
+        'Count drips for 10 seconds, or compare your water meter at night and '
+            'in the morning. No sensors, no internet, no cost.',
+    'onbSetUp': 'Set up my home',
+    'pageOf': 'Page {current} of {total}',
+
+    // Setup form / settings fields
+    'setupTitle': 'Your home setup',
+    'setupSubtitle': 'You can change these anytime in Settings.',
+    'tankCapacity': 'Overhead tank capacity',
+    'tankCapacityHelp': 'Usually printed on the tank, e.g. 500, 1000, 2000',
+    'motorHp': 'Motor power',
+    'motorHpHelp': 'See the label on the motor, e.g. 0.5, 1, 1.5',
+    'electricityRate': 'Electricity rate',
+    'electricityRateHelp': 'Rupees per unit (kWh), from your EB bill',
+    'overflowMinutes': 'Overflow time before noticed',
+    'overflowMinutesHelp':
+        'Minutes water usually overflows before someone switches off the motor',
+    'saveAndStart': 'Save and start',
+
+    // Permissions
+    'permTitle': 'Allow alarms & notifications',
+    'permBody':
+        'JalMitra needs notifications to ring the "tank almost full" alarm, '
+            'even when the app is closed or the phone is locked. Nothing is '
+            'sent anywhere — everything stays on your phone.',
+    'permOffWarning':
+        'Notifications are off. JalMitra cannot ring the alarm when your tank '
+            'is almost full.',
+    'allowAlarms': 'Allow alarms',
+
+    // Notifications
+    'alarmTitle': 'JalMitra: Tank almost full!',
+    'alarmBody': 'Your tank is almost full! Switch off the motor now.',
+    'channelMotorName': 'Tank full alarm',
+    'channelMotorDesc': 'Rings before your overhead tank overflows',
+    'channelReminderName': 'Reminders',
+    'channelReminderDesc': 'Morning reminder for the night meter test',
+    'meterReminderTitle': 'Night Meter Test',
+    'meterReminderBody':
+        'Good morning! Enter your water meter reading before anyone uses water.',
+
+    // Home
+    'weekSaved': 'This week you saved',
+    'motorOn': 'Motor ON',
+    'motorRunning': 'Motor running',
+    'weeklyChartTitle': 'Litres saved this week',
+    'noSavingsYet':
+        'No savings yet this week. Use Motor Guard, fix a leak or finish a '
+            'challenge to start saving!',
+
+    // Motor Guard
+    'demoBadge': 'DEMO MODE',
+    'demoExplain':
+        'Demo mode is on: 1 minute = 1 second for all Motor Guard timings.',
+    'calibrateTitle': 'First, let\'s learn your tank',
+    'calibrateIntro':
+        'JalMitra needs to know how long your motor takes to fill the tank '
+            'from empty. You only do this once.',
+    'calibrateStep1': 'Wait until the overhead tank is empty (or nearly empty).',
+    'calibrateStep2': 'Switch on the motor and tap "Start Calibration".',
+    'calibrateStep3': 'Tap "Tank Full" the moment water reaches the top.',
+    'startCalibration': 'Start Calibration',
+    'calibrating': 'Calibrating…',
+    'calibratingHint':
+        'Keep the motor running. Tap "Tank Full" as soon as the tank is full.',
+    'calibrationSaved': 'Saved! Your tank fills in about {time}.',
+    'calibrationTooShort':
+        'That was too short to be a full tank. Please try again.',
+    'tankFull': 'Tank Full',
+    'fillTimeLearned': 'Your tank fills in about {time}',
+    'fillRuns': 'Learned from {n} run(s)',
+    'levelQuestion': 'How full is the tank now?',
+    'levelEmpty': 'Empty',
+    'levelQuarter': 'Quarter',
+    'levelHalf': 'Half',
+    'levelThreeQuarters': 'Three-quarters',
+    'expectedFullIn': 'Tank will be full in {time} (around {clock})',
+    'startGuard': 'Motor ON – Start Guard',
+    'timeLeft': 'until full',
+    'tankShouldBeFull': 'Tank should be full now!',
+    'expectedFullAt': 'Expected full at',
+    'alarmAt': 'Alarm rings at',
+    'cancelGuardTitle': 'Stop Motor Guard?',
+    'cancelGuardMsg': 'The alarm will be cancelled and nothing will be saved.',
+    'cancelGuardConfirm': 'Stop guard',
+    'successTitle': 'Great!',
+    'successMsg': 'You saved ~{litres} L and ₹{rupees} today.',
+    'learnedMsg': 'JalMitra learned: your tank now fills in about {time}.',
+    'notLearnedMsg':
+        'This run looked unusual, so the learned fill time was not changed.',
+
+    // Flow Timer
+    'chooseFixture': 'Choose a tap or shower',
+    'noFixtures':
+        'No taps saved yet. Measure one with a 1-litre bottle to get started.',
+    'addFixture': 'Add tap / shower',
+    'editFixture': 'Edit tap / shower',
+    'manageFixtures': 'Manage taps & showers',
+    'fixtureCount': '{n} saved',
+    'fixtureName': 'Name',
+    'fixtureNameHint': 'e.g. Kitchen tap, Bathroom shower',
+    'bottleTestTitle': '1-litre bottle test',
+    'bottleTestSteps':
+        'Hold an empty 1-litre bottle under the tap. Tap Start and open the '
+            'tap the way you normally use it. Tap Stop when the bottle is full.',
+    'secondsToFill': 'Seconds to fill 1 litre',
+    'secondsToFillHelp': 'Filled in by the timer, or type it yourself',
+    'flowResult': 'Flow rate: {lps} L/s ({lpm} L/min)',
+    'flowPerMinute': '{lpm} L per minute',
+    'deleteFixtureTitle': 'Delete tap?',
+    'deleteFixtureMsg': '"{name}" will be removed.',
+    'limitLabel': 'Limit',
+    'limitHelp': 'You will be warned when you use more than this',
+    'litresOfLimit': 'litres of {limit} L',
+    'elapsed': 'Time',
+    'limitCrossed': 'Limit crossed! Please turn off the tap.',
+    'usageSaved': 'Saved to history: {litres} L',
+    'history': 'Recent usage',
+    'noHistory': 'No usage recorded yet.',
+
+    // Leak Check – drips
+    'dripTab': 'Drip Calculator',
+    'dripIntro':
+        'Watch the dripping tap. Tap Start, then tap the big button once for '
+            'every drip you see for 10 seconds.',
+    'startDripCount': 'Start 10-second count',
+    'secondsLeft': '{n} seconds left',
+    'tapPerDrip': 'Tap per drip',
+    'orEnterDrips': 'Already counted? Enter the number of drips in 10 seconds:',
+    'dripsIn10s': 'Drips in 10 s',
+    'calculate': 'Calculate',
+    'dripsCounted': '{n} drips in 10 seconds',
+    'dripWaste': 'This tap wastes {litres} L/month ≈ {buckets} buckets',
+    'dripPerDay': 'That is {litres} L every day.',
+    'noDrips': 'No drips counted. Great — no leak here!',
+    'fixedIt': 'Fixed it!',
+    'fixedItSaved': 'Well done! {litres} L/month added to your savings.',
+    'countAgain': 'Count again',
+
+    // Leak Check – night meter
+    'meterTab': 'Night Meter Test',
+    'step1Title': 'Step 1 · At night',
+    'step1Body':
+        'Close all taps, switch off the motor and make sure no one uses water '
+            'overnight. Then enter the reading on your water meter.',
+    'meterUnit': 'Your meter shows',
+    'meterReading': 'Meter reading',
+    'saveNight': 'Save night reading',
+    'nightSaved': 'Saved! We will remind you at 7 AM.',
+    'nightReadingWas': 'Night reading: {reading} {unit}',
+    'step2Title': 'Step 2 · In the morning',
+    'step2Body':
+        'Before anyone uses water, read the meter again and enter it here.',
+    'checkLeak': 'Check for leaks',
+    'startOver': 'Start over',
+    'leakLikely': 'Hidden leak likely! {litres} L lost overnight.',
+    'noLeak': 'No leak detected ✅',
+    'leakTipsTitle': 'Where to look',
+    'leakTip1':
+        'Toilet flush tank: add a few drops of food colour. If colour reaches '
+            'the bowl without flushing, it leaks.',
+    'leakTip2': 'Overhead tank float valve and overflow pipe.',
+    'leakTip3': 'Damp patches on walls, floors or ceilings.',
+    'leakTip4': 'Under sinks, around the motor and pipe joints.',
+    'leakTip5': 'If you cannot find it, call a plumber.',
+    'newTest': 'New test',
+
+    // Challenges
+    'todaysChallenge': "Today's challenge",
+    'savesAbout': 'Saves about {litres} L',
+    'streakDays': '{n}-day streak',
+    'doneToday': 'Done for today ✅',
+    'seeAllChallenges': 'See all challenges',
+    'challengeDoneMsg': '+{litres} L saved! Streak: {n} day(s).',
+    'challengesTitle': 'Water challenges',
+    'allChallenges': 'All 30 challenges',
+    'badgesTitle': 'Badges',
+    'badgeEarned': 'New badge earned!',
+    'badge3': '3-day Starter',
+    'badge7': '7-day Champion',
+    'badge30': '30-day Water Hero',
+    'challenge1': 'Turn off the tap while brushing your teeth',
+    'challenge2': 'Use a bucket instead of a hose to wash your bike',
+    'challenge3': 'Reuse RO reject water for mopping the floor',
+    'challenge4': 'Finish your shower in 5 minutes',
+    'challenge5': 'Run the washing machine only with a full load',
+    'challenge6': 'Wash vegetables in a bowl, not under a running tap',
+    'challenge7': 'Pour vegetable-wash water on your plants',
+    'challenge8': 'Check your toilet flush for silent leaks',
+    'challenge9': 'Pour only the drinking water you need — no half glasses',
+    'challenge10': 'Close the tap while soaping your hands or dishes',
+    'challenge11': 'Water plants in the early morning or evening',
+    'challenge12': 'Take a bucket bath instead of a shower',
+    'challenge13': 'Put a filled water bottle inside the flush tank',
+    'challenge14': 'Sweep the floor or yard instead of washing it',
+    'challenge15': 'Fix or report one dripping tap at home',
+    'challenge16': 'Soak dirty dishes before washing them',
+    'challenge17': 'Collect AC drain water for your plants',
+    'challenge18': 'Use the half-flush button',
+    'challenge19': 'Thaw frozen food in the fridge, not under running water',
+    'challenge20': 'Reuse rice or dal washing water for plants',
+    'challenge21': 'Wash the car with a bucket and cloth',
+    'challenge22': "Check the overhead tank's overflow pipe for waste",
+    'challenge23': 'Turn off the tap while shaving',
+    'challenge24': 'Cover plant pots with dry leaves to keep soil moist',
+    'challenge25': 'Keep a bucket outside to collect rainwater',
+    'challenge26': 'Wash all the dishes together once, not a few at a time',
+    'challenge27': 'Teach a family member one water-saving tip',
+    'challenge28': 'Rinse clothes in a bucket, not under a running tap',
+    'challenge29': 'Reuse washing machine rinse water to clean the floor',
+    'challenge30': 'Use Motor Guard every time you switch on the motor',
+
+    // Settings
+    'settingsSaved': 'Settings saved',
+    'demoMode': 'Demo Mode',
+    'demoModeHelp':
+        '1 minute = 1 second for Motor Guard timings and the alarm. '
+            'For demonstrations.',
+    'motorCalibration': 'Motor calibration',
+    'notCalibrated': 'Not calibrated yet',
+    'recalibrate': 'Recalibrate motor',
+    'recalibrateTitle': 'Recalibrate motor?',
+    'recalibrateMsg':
+        'JalMitra will forget the learned fill time. You will need to '
+            'calibrate again with an empty tank.',
+    'recalibrateDone': 'Calibration cleared. Open Motor Guard to calibrate.',
+    'alarmPermissions': 'Alarm permissions',
+    'alarmPermissionsHelp': 'Allow notifications and exact alarms',
+    'resetAll': 'Reset all data',
+    'resetTitle': 'Reset all data?',
+    'resetMsg':
+        'This deletes your settings, calibration, taps, savings, history and '
+            'streak. This cannot be undone.',
+    'resetConfirm': 'Delete everything',
+  };
+
+  // ===================================================================
+  // TAMIL
+  // ===================================================================
+  static const Map<String, String> _ta = {
+    // App
+    'appName': 'ஜல்மித்ரா',
+    'tagline': 'உங்கள் கைப்பேசி நீர் சேமிப்பாளர்',
+    'about': 'ஜல்மித்ரா v1.0 · உங்கள் கைப்பேசி நீர் சேமிப்பாளர்\n'
+        'இணையம் இல்லாமல் முழுமையாக இயங்கும். உங்கள் தரவு இந்தக் கைப்பேசியை '
+        'விட்டு வெளியே போகாது.',
+
+    // Navigation
+    'navHome': 'முகப்பு',
+    'navMotor': 'மோட்டார் காவல்',
+    'navFlow': 'நீர் அளவி',
+    'navLeak': 'கசிவு சோதனை',
+    'navSettings': 'அமைப்புகள்',
+
+    // Common
+    'next': 'அடுத்து',
+    'back': 'பின்செல்',
+    'skip': 'தவிர்',
+    'save': 'சேமி',
+    'cancel': 'ரத்து',
+    'delete': 'நீக்கு',
+    'ok': 'சரி',
+    'start': 'தொடங்கு',
+    'stop': 'நிறுத்து',
+    'done': 'முடிந்தது',
+    'allow': 'அனுமதி',
+    'notNow': 'இப்போது வேண்டாம்',
+    'today': 'இன்று',
+    'language': 'மொழி',
+    'languageEnglish': 'English',
+    'languageTamil': 'தமிழ்',
+    'am': 'AM',
+    'pm': 'PM',
+
+    // Units
+    'unitLitres': 'லி',
+    'unitCubicMetres': 'மீ³',
+    'unitHp': 'HP',
+    'unitRupeesPerUnit': '₹/யூனிட்',
+    'unitRupees': '₹',
+    'unitKwh': 'kWh',
+    'unitHours': 'மணி',
+    'unitMinutes': 'நிமி',
+    'unitSeconds': 'வி',
+
+    // Weekdays
+    'day1': 'திங்',
+    'day2': 'செவ்',
+    'day3': 'புத',
+    'day4': 'வியா',
+    'day5': 'வெள்',
+    'day6': 'சனி',
+    'day7': 'ஞாயி',
+
+    // Validation
+    'errEmpty': 'தயவுசெய்து ஒரு மதிப்பை உள்ளிடவும்',
+    'errNotNumber': 'தயவுசெய்து சரியான எண்ணை உள்ளிடவும்',
+    'errPositive': '0-ஐ விட அதிகமாக இருக்க வேண்டும்',
+    'errTooLarge': '{max} அல்லது அதற்குக் குறைவாக இருக்க வேண்டும்',
+    'errWholeNumber': 'தயவுசெய்து முழு எண்ணை உள்ளிடவும்',
+    'errName': 'தயவுசெய்து ஒரு பெயரை உள்ளிடவும்',
+    'errTooFast': 'இது மிக வேகம், சரியாக இருக்காது. மீண்டும் அளவிடுங்கள்.',
+    'errMorningLower':
+        'காலை அளவீடு இரவு அளவீட்டை விடக் குறைவாக இருக்க முடியாது',
+
+    // Onboarding
+    'onb1Title': 'தொட்டி நிரம்பி வழிய விடாதீர்கள்',
+    'onb1Body':
+        'மோட்டாரை இயக்கும்போது ஜல்மித்ராவிடம் சொல்லுங்கள். உங்கள் தொட்டி '
+            'நிரம்ப எவ்வளவு நேரம் ஆகும் என்பதை அது கற்றுக்கொண்டு, நிரம்பி '
+            'வழிவதற்கு முன்பே அலாரம் அடிக்கும் — செயலி மூடியிருந்தாலும் கூட.',
+    'onb2Title': 'ஒவ்வொரு லிட்டரையும் அளவிடுங்கள்',
+    'onb2Body':
+        'எந்தக் குழாய் அல்லது ஷவரிலும் 1 லிட்டர் பாட்டில் நிரம்பும் நேரத்தை '
+            'அளவிடுங்கள். பிறகு நீங்கள் பயன்படுத்தும் லிட்டர்களை ஜல்மித்ரா '
+            'நேரலையாகக் காட்டி, வரம்பைத் தாண்டும்போது எச்சரிக்கும்.',
+    'onb3Title': 'மறைந்த கசிவுகளைக் கண்டறியுங்கள்',
+    'onb3Body':
+        '10 விநாடிகள் சொட்டுகளை எண்ணுங்கள், அல்லது இரவும் காலையும் நீர் '
+            'மீட்டரை ஒப்பிடுங்கள். சென்சார் இல்லை, இணையம் இல்லை, செலவும் இல்லை.',
+    'onbSetUp': 'என் வீட்டை அமைக்கவும்',
+    'pageOf': 'பக்கம் {current} / {total}',
+
+    // Setup form / settings fields
+    'setupTitle': 'உங்கள் வீட்டு அமைப்பு',
+    'setupSubtitle': 'இவற்றை எப்போது வேண்டுமானாலும் அமைப்புகளில் மாற்றலாம்.',
+    'tankCapacity': 'மேல்நிலைத் தொட்டி கொள்ளளவு',
+    'tankCapacityHelp':
+        'பொதுவாகத் தொட்டியில் அச்சிடப்பட்டிருக்கும், எ.கா. 500, 1000, 2000',
+    'motorHp': 'மோட்டார் திறன்',
+    'motorHpHelp': 'மோட்டாரின் லேபிளைப் பாருங்கள், எ.கா. 0.5, 1, 1.5',
+    'electricityRate': 'மின் கட்டணம்',
+    'electricityRateHelp': 'ஒரு யூனிட்டுக்கு (kWh) ரூபாய், உங்கள் மின் ரசீதில்',
+    'overflowMinutes': 'கவனிக்கும் முன் வழியும் நேரம்',
+    'overflowMinutesHelp':
+        'மோட்டாரை யாராவது அணைக்கும் முன் பொதுவாக எத்தனை நிமிடம் நீர் வழிகிறது',
+    'saveAndStart': 'சேமித்துத் தொடங்கு',
+
+    // Permissions
+    'permTitle': 'அலாரம் & அறிவிப்புகளை அனுமதியுங்கள்',
+    'permBody':
+        'செயலி மூடியிருந்தாலும், கைப்பேசி பூட்டியிருந்தாலும் "தொட்டி கிட்டத்தட்ட '
+            'நிரம்பியது" அலாரம் அடிக்க ஜல்மித்ராவுக்கு அறிவிப்பு அனுமதி தேவை. '
+            'எதுவும் எங்கும் அனுப்பப்படாது — அனைத்தும் உங்கள் கைப்பேசியிலேயே இருக்கும்.',
+    'permOffWarning':
+        'அறிவிப்புகள் அணைக்கப்பட்டுள்ளன. தொட்டி நிரம்பும்போது ஜல்மித்ராவால் '
+            'அலாரம் அடிக்க முடியாது.',
+    'allowAlarms': 'அலாரத்தை அனுமதி',
+
+    // Notifications
+    'alarmTitle': 'ஜல்மித்ரா: தொட்டி கிட்டத்தட்ட நிரம்பியது!',
+    'alarmBody':
+        'உங்கள் தொட்டி கிட்டத்தட்ட நிரம்பிவிட்டது! இப்போதே மோட்டாரை அணையுங்கள்.',
+    'channelMotorName': 'தொட்டி நிரம்பும் அலாரம்',
+    'channelMotorDesc': 'மேல்நிலைத் தொட்டி வழிவதற்கு முன் அலாரம் அடிக்கும்',
+    'channelReminderName': 'நினைவூட்டல்கள்',
+    'channelReminderDesc': 'இரவு மீட்டர் சோதனைக்கான காலை நினைவூட்டல்',
+    'meterReminderTitle': 'இரவு மீட்டர் சோதனை',
+    'meterReminderBody':
+        'காலை வணக்கம்! யாரும் நீர் பயன்படுத்தும் முன் நீர் மீட்டர் அளவீட்டை உள்ளிடுங்கள்.',
+
+    // Home
+    'weekSaved': 'இந்த வாரம் நீங்கள் சேமித்தது',
+    'motorOn': 'மோட்டார் ON',
+    'motorRunning': 'மோட்டார் இயங்குகிறது',
+    'weeklyChartTitle': 'இந்த வாரம் சேமித்த லிட்டர்கள்',
+    'noSavingsYet':
+        'இந்த வாரம் இன்னும் சேமிப்பு இல்லை. மோட்டார் காவலைப் பயன்படுத்துங்கள், '
+            'கசிவைச் சரிசெய்யுங்கள் அல்லது ஒரு சவாலை முடியுங்கள்!',
+
+    // Motor Guard
+    'demoBadge': 'டெமோ முறை',
+    'demoExplain':
+        'டெமோ முறை இயக்கத்தில் உள்ளது: மோட்டார் காவலின் எல்லா நேரங்களிலும் 1 நிமிடம் = 1 விநாடி.',
+    'calibrateTitle': 'முதலில், உங்கள் தொட்டியை அறிந்துகொள்வோம்',
+    'calibrateIntro':
+        'காலியான தொட்டியை நிரப்ப உங்கள் மோட்டாருக்கு எவ்வளவு நேரம் ஆகிறது என்பது '
+            'ஜல்மித்ராவுக்குத் தெரிய வேண்டும். இதை ஒருமுறை மட்டும் செய்தால் போதும்.',
+    'calibrateStep1':
+        'மேல்நிலைத் தொட்டி காலியாகும் வரை (அல்லது கிட்டத்தட்ட காலியாகும் வரை) காத்திருங்கள்.',
+    'calibrateStep2': 'மோட்டாரை இயக்கி "அளவீட்டைத் தொடங்கு" என்பதைத் தட்டுங்கள்.',
+    'calibrateStep3':
+        'நீர் மேலே வந்தவுடன் "தொட்டி நிரம்பியது" என்பதைத் தட்டுங்கள்.',
+    'startCalibration': 'அளவீட்டைத் தொடங்கு',
+    'calibrating': 'அளவிடுகிறது…',
+    'calibratingHint':
+        'மோட்டார் இயங்கட்டும். தொட்டி நிரம்பியவுடன் "தொட்டி நிரம்பியது" என்பதைத் தட்டுங்கள்.',
+    'calibrationSaved': 'சேமிக்கப்பட்டது! உங்கள் தொட்டி சுமார் {time}-இல் நிரம்பும்.',
+    'calibrationTooShort':
+        'முழுத் தொட்டிக்கு இது மிகக் குறைவான நேரம். மீண்டும் முயற்சிக்கவும்.',
+    'tankFull': 'தொட்டி நிரம்பியது',
+    'fillTimeLearned': 'உங்கள் தொட்டி சுமார் {time}-இல் நிரம்பும்',
+    'fillRuns': '{n} முறை இயக்கியதிலிருந்து கற்றது',
+    'levelQuestion': 'இப்போது தொட்டியில் எவ்வளவு நீர் உள்ளது?',
+    'levelEmpty': 'காலி',
+    'levelQuarter': 'கால் பங்கு',
+    'levelHalf': 'பாதி',
+    'levelThreeQuarters': 'முக்கால் பங்கு',
+    'expectedFullIn': 'தொட்டி {time}-இல் நிரம்பும் (சுமார் {clock})',
+    'startGuard': 'மோட்டார் ON – காவலைத் தொடங்கு',
+    'timeLeft': 'நிரம்ப மீதமுள்ளது',
+    'tankShouldBeFull': 'தொட்டி இப்போது நிரம்பியிருக்கும்!',
+    'expectedFullAt': 'நிரம்பும் நேரம்',
+    'alarmAt': 'அலாரம் அடிக்கும் நேரம்',
+    'cancelGuardTitle': 'மோட்டார் காவலை நிறுத்தவா?',
+    'cancelGuardMsg': 'அலாரம் ரத்து செய்யப்படும், எதுவும் சேமிக்கப்படாது.',
+    'cancelGuardConfirm': 'காவலை நிறுத்து',
+    'successTitle': 'அருமை!',
+    'successMsg': 'இன்று சுமார் {litres} லி நீரையும் ₹{rupees}-ஐயும் சேமித்தீர்கள்.',
+    'learnedMsg':
+        'ஜல்மித்ரா கற்றுக்கொண்டது: உங்கள் தொட்டி இப்போது சுமார் {time}-இல் நிரம்பும்.',
+    'notLearnedMsg':
+        'இந்த முறை வழக்கத்துக்கு மாறாக இருந்ததால், கற்ற நிரப்பு நேரம் மாற்றப்படவில்லை.',
+
+    // Flow Timer
+    'chooseFixture': 'குழாய் அல்லது ஷவரைத் தேர்ந்தெடுங்கள்',
+    'noFixtures':
+        'இன்னும் குழாய் எதுவும் சேமிக்கவில்லை. தொடங்க 1 லிட்டர் பாட்டிலால் ஒன்றை அளவிடுங்கள்.',
+    'addFixture': 'குழாய் / ஷவர் சேர்',
+    'editFixture': 'குழாய் / ஷவரைத் திருத்து',
+    'manageFixtures': 'குழாய்கள் & ஷவர்களை நிர்வகி',
+    'fixtureCount': '{n} சேமிக்கப்பட்டுள்ளன',
+    'fixtureName': 'பெயர்',
+    'fixtureNameHint': 'எ.கா. சமையலறைக் குழாய், குளியலறை ஷவர்',
+    'bottleTestTitle': '1 லிட்டர் பாட்டில் சோதனை',
+    'bottleTestSteps':
+        'காலியான 1 லிட்டர் பாட்டிலைக் குழாயின் கீழ் பிடியுங்கள். "தொடங்கு" தட்டி, '
+            'வழக்கம்போல் குழாயைத் திறங்கள். பாட்டில் நிரம்பியதும் "நிறுத்து" தட்டுங்கள்.',
+    'secondsToFill': '1 லிட்டர் நிரம்ப ஆகும் விநாடிகள்',
+    'secondsToFillHelp': 'டைமர் நிரப்பும், அல்லது நீங்களே உள்ளிடலாம்',
+    'flowResult': 'நீர் ஓட்டம்: {lps} லி/வி ({lpm} லி/நிமி)',
+    'flowPerMinute': 'நிமிடத்துக்கு {lpm} லி',
+    'deleteFixtureTitle': 'குழாயை நீக்கவா?',
+    'deleteFixtureMsg': '"{name}" நீக்கப்படும்.',
+    'limitLabel': 'வரம்பு',
+    'limitHelp': 'இதை விட அதிகம் பயன்படுத்தினால் எச்சரிக்கப்படுவீர்கள்',
+    'litresOfLimit': '{limit} லி வரம்பில் லிட்டர்கள்',
+    'elapsed': 'நேரம்',
+    'limitCrossed': 'வரம்பைத் தாண்டிவிட்டது! தயவுசெய்து குழாயை மூடுங்கள்.',
+    'usageSaved': 'வரலாற்றில் சேமிக்கப்பட்டது: {litres} லி',
+    'history': 'சமீபத்திய பயன்பாடு',
+    'noHistory': 'இன்னும் பயன்பாடு எதுவும் பதிவாகவில்லை.',
+
+    // Leak Check – drips
+    'dripTab': 'சொட்டுக் கணிப்பான்',
+    'dripIntro':
+        'சொட்டும் குழாயைக் கவனியுங்கள். "தொடங்கு" தட்டி, 10 விநாடிகளுக்கு ஒவ்வொரு '
+            'சொட்டுக்கும் பெரிய பொத்தானை ஒருமுறை தட்டுங்கள்.',
+    'startDripCount': '10 விநாடி எண்ணிக்கையைத் தொடங்கு',
+    'secondsLeft': 'இன்னும் {n} விநாடிகள்',
+    'tapPerDrip': 'ஒவ்வொரு சொட்டுக்கும் தட்டு',
+    'orEnterDrips': 'ஏற்கனவே எண்ணிவிட்டீர்களா? 10 விநாடியில் விழுந்த சொட்டுகளை உள்ளிடுங்கள்:',
+    'dripsIn10s': '10 வி-இல் சொட்டுகள்',
+    'calculate': 'கணக்கிடு',
+    'dripsCounted': '10 விநாடியில் {n} சொட்டுகள்',
+    'dripWaste': 'இந்தக் குழாய் மாதம் {litres} லி வீணாக்குகிறது ≈ {buckets} வாளிகள்',
+    'dripPerDay': 'அதாவது தினமும் {litres} லி.',
+    'noDrips': 'சொட்டு எதுவும் இல்லை. அருமை — இங்கே கசிவு இல்லை!',
+    'fixedIt': 'சரிசெய்துவிட்டேன்!',
+    'fixedItSaved': 'நன்று! மாதம் {litres} லி உங்கள் சேமிப்பில் சேர்க்கப்பட்டது.',
+    'countAgain': 'மீண்டும் எண்ணு',
+
+    // Leak Check – night meter
+    'meterTab': 'இரவு மீட்டர் சோதனை',
+    'step1Title': 'படி 1 · இரவில்',
+    'step1Body':
+        'எல்லாக் குழாய்களையும் மூடி, மோட்டாரை அணைத்து, இரவில் யாரும் நீர் '
+            'பயன்படுத்தாமல் பார்த்துக்கொள்ளுங்கள். பிறகு நீர் மீட்டரில் உள்ள அளவீட்டை உள்ளிடுங்கள்.',
+    'meterUnit': 'உங்கள் மீட்டர் காட்டுவது',
+    'meterReading': 'மீட்டர் அளவீடு',
+    'saveNight': 'இரவு அளவீட்டைச் சேமி',
+    'nightSaved': 'சேமிக்கப்பட்டது! காலை 7 மணிக்கு நினைவூட்டுவோம்.',
+    'nightReadingWas': 'இரவு அளவீடு: {reading} {unit}',
+    'step2Title': 'படி 2 · காலையில்',
+    'step2Body':
+        'யாரும் நீர் பயன்படுத்தும் முன், மீட்டரை மீண்டும் பார்த்து இங்கே உள்ளிடுங்கள்.',
+    'checkLeak': 'கசிவைச் சோதி',
+    'startOver': 'மீண்டும் தொடங்கு',
+    'leakLikely': 'மறைந்த கசிவு இருக்கலாம்! இரவில் {litres} லி வீணானது.',
+    'noLeak': 'கசிவு எதுவும் இல்லை ✅',
+    'leakTipsTitle': 'எங்கே பார்க்க வேண்டும்',
+    'leakTip1':
+        'கழிப்பறை ஃப்ளஷ் தொட்டி: சில சொட்டு உணவு வண்ணம் சேருங்கள். ஃப்ளஷ் '
+            'செய்யாமலே வண்ணம் கோப்பையில் வந்தால் கசிவு உள்ளது.',
+    'leakTip2': 'மேல்நிலைத் தொட்டியின் மிதவை வால்வு மற்றும் வழிதல் குழாய்.',
+    'leakTip3': 'சுவர், தரை அல்லது கூரையில் ஈரத் திட்டுகள்.',
+    'leakTip4': 'சிங்க் அடியில், மோட்டார் அருகில் மற்றும் குழாய் இணைப்புகளில்.',
+    'leakTip5': 'கண்டுபிடிக்க முடியவில்லை என்றால், பிளம்பரை அழையுங்கள்.',
+    'newTest': 'புதிய சோதனை',
+
+    // Challenges
+    'todaysChallenge': 'இன்றைய சவால்',
+    'savesAbout': 'சுமார் {litres} லி சேமிக்கும்',
+    'streakDays': 'தொடர்ந்து {n} நாட்கள்',
+    'doneToday': 'இன்றைக்கு முடிந்தது ✅',
+    'seeAllChallenges': 'எல்லாச் சவால்களையும் பார்',
+    'challengeDoneMsg': '+{litres} லி சேமிப்பு! தொடர்: {n} நாள்.',
+    'challengesTitle': 'நீர் சவால்கள்',
+    'allChallenges': 'அனைத்து 30 சவால்கள்',
+    'badgesTitle': 'பதக்கங்கள்',
+    'badgeEarned': 'புதிய பதக்கம் கிடைத்தது!',
+    'badge3': '3 நாள் தொடக்கம்',
+    'badge7': '7 நாள் சாம்பியன்',
+    'badge30': '30 நாள் நீர் நாயகன்',
+    'challenge1': 'பல் துலக்கும்போது குழாயை மூடி வையுங்கள்',
+    'challenge2': 'பைக்கைக் கழுவ குழாய்க்குப் பதிலாக வாளியைப் பயன்படுத்துங்கள்',
+    'challenge3': 'RO கழிவு நீரைத் தரை துடைக்கப் பயன்படுத்துங்கள்',
+    'challenge4': '5 நிமிடத்தில் குளியலை முடியுங்கள்',
+    'challenge5': 'முழு அளவு துணிகள் இருக்கும்போது மட்டுமே வாஷிங் மெஷினை இயக்குங்கள்',
+    'challenge6': 'காய்கறிகளை ஓடும் குழாயின் கீழ் அல்ல, பாத்திரத்தில் கழுவுங்கள்',
+    'challenge7': 'காய்கறி கழுவிய நீரைச் செடிகளுக்கு ஊற்றுங்கள்',
+    'challenge8': 'கழிப்பறை ஃப்ளஷில் சத்தமில்லாக் கசிவு உள்ளதா எனப் பாருங்கள்',
+    'challenge9': 'தேவையான அளவு மட்டுமே குடிநீர் ஊற்றுங்கள் — பாதி டம்ளர் வீணாக வேண்டாம்',
+    'challenge10': 'கை அல்லது பாத்திரங்களுக்குச் சோப்பு போடும்போது குழாயை மூடுங்கள்',
+    'challenge11': 'அதிகாலை அல்லது மாலையில் செடிகளுக்கு நீர் ஊற்றுங்கள்',
+    'challenge12': 'ஷவருக்குப் பதிலாக வாளியில் குளியுங்கள்',
+    'challenge13': 'ஃப்ளஷ் தொட்டிக்குள் நீர் நிரப்பிய பாட்டிலை வையுங்கள்',
+    'challenge14': 'தரை அல்லது முற்றத்தைக் கழுவாமல் பெருக்குங்கள்',
+    'challenge15': 'வீட்டில் சொட்டும் ஒரு குழாயைச் சரிசெய்யுங்கள் அல்லது தெரிவியுங்கள்',
+    'challenge16': 'கழுவும் முன் அழுக்குப் பாத்திரங்களை ஊறவையுங்கள்',
+    'challenge17': 'ஏசியிலிருந்து வடியும் நீரைச் செடிகளுக்குச் சேமியுங்கள்',
+    'challenge18': 'அரை ஃப்ளஷ் பொத்தானைப் பயன்படுத்துங்கள்',
+    'challenge19': 'உறைந்த உணவை ஓடும் நீரில் அல்ல, ஃப்ரிட்ஜில் உருகவிடுங்கள்',
+    'challenge20': 'அரிசி அல்லது பருப்பு கழுவிய நீரைச் செடிகளுக்குப் பயன்படுத்துங்கள்',
+    'challenge21': 'காரை வாளியும் துணியும் கொண்டு கழுவுங்கள்',
+    'challenge22': 'மேல்நிலைத் தொட்டியின் வழிதல் குழாயில் நீர் வீணாகிறதா எனப் பாருங்கள்',
+    'challenge23': 'ஷேவ் செய்யும்போது குழாயை மூடுங்கள்',
+    'challenge24': 'மண் ஈரமாக இருக்கச் செடித் தொட்டிகளை உலர்ந்த இலைகளால் மூடுங்கள்',
+    'challenge25': 'மழைநீரைச் சேமிக்க ஒரு வாளியை வெளியே வையுங்கள்',
+    'challenge26': 'பாத்திரங்களை அவ்வப்போது அல்ல, ஒரே முறையாகக் கழுவுங்கள்',
+    'challenge27': 'குடும்பத்தில் ஒருவருக்கு ஒரு நீர் சேமிப்புக் குறிப்பைச் சொல்லிக் கொடுங்கள்',
+    'challenge28': 'துணிகளை ஓடும் குழாயில் அல்ல, வாளியில் அலசுங்கள்',
+    'challenge29': 'வாஷிங் மெஷின் அலசிய நீரைத் தரை சுத்தம் செய்யப் பயன்படுத்துங்கள்',
+    'challenge30': 'மோட்டாரை இயக்கும் ஒவ்வொரு முறையும் மோட்டார் காவலைப் பயன்படுத்துங்கள்',
+
+    // Settings
+    'settingsSaved': 'அமைப்புகள் சேமிக்கப்பட்டன',
+    'demoMode': 'டெமோ முறை',
+    'demoModeHelp':
+        'மோட்டார் காவல் நேரங்கள் மற்றும் அலாரத்துக்கு 1 நிமிடம் = 1 விநாடி. '
+            'செய்முறை விளக்கத்துக்கு.',
+    'motorCalibration': 'மோட்டார் அளவீடு',
+    'notCalibrated': 'இன்னும் அளவிடவில்லை',
+    'recalibrate': 'மோட்டாரை மீண்டும் அளவிடு',
+    'recalibrateTitle': 'மோட்டாரை மீண்டும் அளவிடவா?',
+    'recalibrateMsg':
+        'கற்ற நிரப்பு நேரத்தை ஜல்மித்ரா மறந்துவிடும். காலியான தொட்டியுடன் '
+            'மீண்டும் அளவிட வேண்டும்.',
+    'recalibrateDone': 'அளவீடு அழிக்கப்பட்டது. அளவிட மோட்டார் காவலைத் திறங்கள்.',
+    'alarmPermissions': 'அலாரம் அனுமதிகள்',
+    'alarmPermissionsHelp': 'அறிவிப்புகள் மற்றும் துல்லியமான அலாரங்களை அனுமதி',
+    'resetAll': 'எல்லாத் தரவையும் அழி',
+    'resetTitle': 'எல்லாத் தரவையும் அழிக்கவா?',
+    'resetMsg':
+        'உங்கள் அமைப்புகள், அளவீடு, குழாய்கள், சேமிப்பு, வரலாறு மற்றும் தொடர் '
+            'அனைத்தும் நீக்கப்படும். இதைத் திரும்பப் பெற முடியாது.',
+    'resetConfirm': 'அனைத்தையும் நீக்கு',
+  };
 }

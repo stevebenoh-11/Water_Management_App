@@ -1,39 +1,42 @@
-import 'dart:convert';
-
+/// A running Motor Guard session, persisted so the countdown survives the
+/// app being closed and reopened.
 class MotorSession {
-  final DateTime startTime;
-  final double initialLevel;
-  final double durationSeconds;
-  final bool isCalibrating;
-
-  MotorSession({
+  const MotorSession({
     required this.startTime,
-    required this.initialLevel,
-    required this.durationSeconds,
-    this.isCalibrating = false,
+    required this.level,
+    required this.endTime,
+    this.demoMode = false,
+    this.isCalibration = false,
   });
 
-  DateTime get expectedEndTime => startTime.add(Duration(seconds: durationSeconds.round()));
+  /// When the motor was switched on.
+  final DateTime startTime;
 
-  Map<String, dynamic> toMap() {
-    return {
-      'startTime': startTime.toIso8601String(),
-      'initialLevel': initialLevel,
-      'durationSeconds': durationSeconds,
-      'isCalibrating': isCalibrating,
-    };
-  }
+  /// Starting water level as a fraction: 0, 0.25, 0.5 or 0.75.
+  final double level;
 
-  factory MotorSession.fromMap(Map<String, dynamic> map) {
-    return MotorSession(
-      startTime: DateTime.parse(map['startTime']),
-      initialLevel: (map['initialLevel'] as num).toDouble(),
-      durationSeconds: (map['durationSeconds'] as num).toDouble(),
-      isCalibrating: map['isCalibrating'] as bool? ?? false,
-    );
-  }
+  /// Expected time the tank becomes full.
+  final DateTime endTime;
 
-  String toJson() => json.encode(toMap());
+  /// Whether the session was started in demo mode (1 min = 1 s).
+  final bool demoMode;
 
-  factory MotorSession.fromJson(String source) => MotorSession.fromMap(json.decode(source));
+  /// True while calibrating (empty tank, end time unknown).
+  final bool isCalibration;
+
+  Map<String, dynamic> toJson() => {
+        'startTime': startTime.toIso8601String(),
+        'level': level,
+        'endTime': endTime.toIso8601String(),
+        'demoMode': demoMode,
+        'isCalibration': isCalibration,
+      };
+
+  factory MotorSession.fromJson(Map<String, dynamic> json) => MotorSession(
+        startTime: DateTime.parse(json['startTime'] as String),
+        level: (json['level'] as num).toDouble(),
+        endTime: DateTime.parse(json['endTime'] as String),
+        demoMode: json['demoMode'] == true,
+        isCalibration: json['isCalibration'] == true,
+      );
 }

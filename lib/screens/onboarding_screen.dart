@@ -1,249 +1,284 @@
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
+
 import '../models/user_settings.dart';
-import '../l10n/app_strings.dart';
-import 'main_screen.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_scope.dart';
+import '../widgets/language_toggle.dart';
+import '../widgets/number_field.dart';
 
+/// First-launch flow: 3 swipe pages explaining the app, then the setup form.
 class OnboardingScreen extends StatefulWidget {
-  final StorageService storageService;
-
-  const OnboardingScreen({super.key, required this.storageService});
+  const OnboardingScreen({super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final PageController _pageController = PageController();
-  int _currentPage = 0;
+  final _pageController = PageController();
+  int _page = 0;
 
-  late TextEditingController _capacityController;
-  late TextEditingController _hpController;
-  late TextEditingController _rateController;
-  late TextEditingController _overflowController;
+  static const _infoPages = [
+    (icon: Icons.water_damage_outlined, title: 'onb1Title', body: 'onb1Body'),
+    (icon: Icons.shower_outlined, title: 'onb2Title', body: 'onb2Body'),
+    (icon: Icons.water_drop_outlined, title: 'onb3Title', body: 'onb3Body'),
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    final settings = widget.storageService.getUserSettings();
-    _capacityController = TextEditingController(text: settings.tankCapacityLitres.toStringAsFixed(0));
-    _hpController = TextEditingController(text: settings.motorHp.toStringAsFixed(1));
-    _rateController = TextEditingController(text: settings.electricityRate.toStringAsFixed(1));
-    _overflowController = TextEditingController(text: settings.typicalOverflowMinutes.toStringAsFixed(0));
-  }
+  /// Info pages + the setup form page.
+  int get _pageCount => _infoPages.length + 1;
+  bool get _onSetupPage => _page == _infoPages.length;
+
+  void _goTo(int page) => _pageController.animateToPage(
+        page,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
 
   @override
   void dispose() {
     _pageController.dispose();
-    _capacityController.dispose();
-    _hpController.dispose();
-    _rateController.dispose();
-    _overflowController.dispose();
     super.dispose();
-  }
-
-  void _finishSetup() async {
-    final double capacity = double.tryParse(_capacityController.text) ?? 1000.0;
-    final double hp = double.tryParse(_hpController.text) ?? 1.0;
-    final double rate = double.tryParse(_rateController.text) ?? 6.0;
-    final double overflow = double.tryParse(_overflowController.text) ?? 5.0;
-
-    final currentSettings = widget.storageService.getUserSettings();
-    final updatedSettings = currentSettings.copyWith(
-      tankCapacityLitres: capacity <= 0 ? 1000.0 : capacity,
-      motorHp: hp <= 0 ? 1.0 : hp,
-      electricityRate: rate <= 0 ? 6.0 : rate,
-      typicalOverflowMinutes: overflow <= 0 ? 5.0 : overflow,
-      isOnboardingCompleted: true,
-    );
-
-    await widget.storageService.saveUserSettings(updatedSettings);
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => MainScreen(storageService: widget.storageService),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final settings = widget.storageService.getUserSettings();
-    final lang = settings.language;
-
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (idx) {
-                  setState(() => _currentPage = idx);
-                },
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
                 children: [
-                  _buildPage(
-                    icon: Icons.water_drop_rounded,
-                    title: AppStrings.get('onboarding_title_1', lang),
-                    description: AppStrings.get('onboarding_desc_1', lang),
+                  const Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: LanguageToggle(),
+                    ),
                   ),
-                  _buildPage(
-                    icon: Icons.timer_rounded,
-                    title: AppStrings.get('onboarding_title_2', lang),
-                    description: AppStrings.get('onboarding_desc_2', lang),
-                  ),
-                  _buildPage(
-                    icon: Icons.build_circle_rounded,
-                    title: AppStrings.get('onboarding_title_3', lang),
-                    description: AppStrings.get('onboarding_desc_3', lang),
-                  ),
-                  _buildFormPage(lang),
+                  if (!_onSetupPage)
+                    TextButton(
+                      onPressed: () => _goTo(_infoPages.length),
+                      child: Text(context.tr('skip')),
+                    ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (p) => setState(() => _page = p),
                 children: [
-                  // Page Indicator
-                  Row(
-                    children: List.generate(
-                      4,
-                      (index) => Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentPage == index ? 16 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index
-                              ? Theme.of(context).primaryColor
-                              : Colors.grey.shade400,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
+                  for (final p in _infoPages)
+                    _InfoPage(
+                      icon: p.icon,
+                      title: context.tr(p.title),
+                      body: context.tr(p.body),
                     ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_currentPage < 3) {
-                        _pageController.nextPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      } else {
-                        _finishSetup();
-                      }
-                    },
-                    child: Text(
-                      _currentPage == 3
-                          ? AppStrings.get('get_started', lang)
-                          : 'Next',
-                    ),
-                  ),
+                  const _SetupForm(),
                 ],
               ),
-            )
+            ),
+            if (!_onSetupPage) _buildBottomBar(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPage({
-    required IconData icon,
-    required String title,
-    required String description,
-  }) {
+  Widget _buildBottomBar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(32.0),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.1),
-              shape: BoxShape.circle,
+          Semantics(
+            label: context.tr('pageOf', {
+              'current': '${_page + 1}',
+              'total': '$_pageCount',
+            }),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < _pageCount; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
+                    width: i == _page ? 28 : 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: i == _page
+                          ? AppColors.blue
+                          : AppColors.blue.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+              ],
             ),
-            child: Icon(icon, size: 90, color: Theme.of(context).primaryColor),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _goTo(_page + 1),
+              icon: const Icon(Icons.arrow_forward),
+              label: Text(
+                _page == _infoPages.length - 1
+                    ? context.tr('onbSetUp')
+                    : context.tr('next'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPage extends StatelessWidget {
+  const _InfoPage({required this.icon, required this.title, required this.body});
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          Container(
+            width: 180,
+            height: 180,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [AppColors.aqua, AppColors.blue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Icon(icon, size: 96, color: Colors.white),
+          ),
+          const SizedBox(height: 36),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineMedium,
           ),
           const SizedBox(height: 16),
           Text(
-            description,
+            body,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.black70),
+            style: theme.textTheme.bodyLarge,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildFormPage(String lang) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+/// Setup form saved to shared_preferences.
+class _SetupForm extends StatefulWidget {
+  const _SetupForm();
+
+  @override
+  State<_SetupForm> createState() => _SetupFormState();
+}
+
+class _SetupFormState extends State<_SetupForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _tank = TextEditingController(
+      text: formatNumber(UserSettings.defaultTankCapacity));
+  final _hp =
+      TextEditingController(text: formatNumber(UserSettings.defaultMotorHp));
+  final _rate = TextEditingController(
+      text: formatNumber(UserSettings.defaultElectricityRate));
+  final _overflow = TextEditingController(
+      text: formatNumber(UserSettings.defaultOverflowMinutes));
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _tank.dispose();
+    _hp.dispose();
+    _rate.dispose();
+    _overflow.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _saving = true);
+    final app = context.app;
+    await app.completeOnboarding(
+      app.settings.copyWith(
+        tankCapacityLitres: double.parse(_tank.text.trim()),
+        motorHp: double.parse(_hp.text.trim()),
+        electricityRate: double.parse(_rate.text.trim()),
+        overflowMinutes: double.parse(_overflow.text.trim()),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
-          const SizedBox(height: 20),
-          Text(
-            AppStrings.get('setup_title', lang),
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            AppStrings.get('setup_subtitle', lang),
-            style: const TextStyle(fontSize: 14, color: Colors.black70),
-          ),
+          Text(context.tr('setupTitle'), style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 4),
+          Text(context.tr('setupSubtitle'), style: theme.textTheme.bodyLarge),
           const SizedBox(height: 24),
-          _buildTextField(
-            controller: _capacityController,
-            label: AppStrings.get('tank_capacity', lang),
-            icon: Icons.opacity,
+          NumberField(
+            controller: _tank,
+            label: context.tr('tankCapacity'),
+            helper: context.tr('tankCapacityHelp'),
+            suffix: context.tr('unitLitres'),
+            icon: Icons.propane_tank_outlined,
+            max: 100000,
           ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _hpController,
-            label: AppStrings.get('motor_hp', lang),
-            icon: Icons.flash_on,
+          const SizedBox(height: 20),
+          NumberField(
+            controller: _hp,
+            label: context.tr('motorHp'),
+            helper: context.tr('motorHpHelp'),
+            suffix: context.tr('unitHp'),
+            icon: Icons.electric_bolt_outlined,
+            max: 20,
           ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _rateController,
-            label: AppStrings.get('elec_rate', lang),
+          const SizedBox(height: 20),
+          NumberField(
+            controller: _rate,
+            label: context.tr('electricityRate'),
+            helper: context.tr('electricityRateHelp'),
+            suffix: context.tr('unitRupeesPerUnit'),
             icon: Icons.currency_rupee,
+            max: 100,
           ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _overflowController,
-            label: AppStrings.get('typical_overflow', lang),
-            icon: Icons.timer,
+          const SizedBox(height: 20),
+          NumberField(
+            controller: _overflow,
+            label: context.tr('overflowMinutes'),
+            helper: context.tr('overflowMinutesHelp'),
+            suffix: context.tr('unitMinutes'),
+            icon: Icons.timer_outlined,
+            max: 240,
+            textInputAction: TextInputAction.done,
+          ),
+          const SizedBox(height: 32),
+          FilledButton.icon(
+            onPressed: _saving ? null : _save,
+            icon: const Icon(Icons.check_circle_outline),
+            label: Text(context.tr('saveAndStart')),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: Colors.white,
       ),
     );
   }

@@ -1,107 +1,201 @@
-# JalMitra – Your Pocket Water Saver
+# JalMitra – Your Pocket Water Saver 💧
 
-**JalMitra** is a zero-hardware, zero-cost, fully offline Android application built for **FLUID HACKATHON 2026** (Department of EEE, KPR Institute of Engineering and Technology).
+**JalMitra** (ஜல்மித்ரா) is a zero-hardware, zero-cost, fully offline Android app that
+stops overhead-tank overflows, measures water use and finds leaks — using only the
+phone's timer, buttons and notifications.
 
----
-
-## 🌊 Overview & Problem Statement
-In Indian households with sump + overhead tank + motor setups, millions of litres of potable water and thousands of kilowatt-hours of electricity are lost daily due to overhead tank overflows, unmonitored tap/shower flow, and hidden pipe leaks.
-
-**JalMitra** turns any smartphone into an intelligent household water manager without requiring any external hardware or sensors:
-1. **Motor Guard (Hero Feature)**: Calculates exact tank fill times based on motor HP and initial water level. Fires exact alarms even when the phone is locked or app is closed. Self-learns motor performance over time.
-2. **Flow Timer**: Calibrates individual tap and shower flow rates (L/s) using a standard 1-Litre bottle and alerts users when water limits are reached.
-3. **Leak Check**:
-   - *Drip Calculator*: Converts 10-second drip counts into monthly litres and bucket waste equivalents.
-   - *Night Meter Test*: Detects hidden leaks by comparing night and morning water meter readings.
-4. **Daily Water Challenges & Gamification**: 30 daily water-saving habits with streaks and milestone badges.
-5. **Bilingual Support**: Instant toggle between English and Tamil (தமிழ்).
-6. **Demo Mode**: 1 minute = 1 second speed-up for instant hackathon live demonstrations.
+Built for **Fluid Hackathon 2026**, Department of EEE, KPR Institute of Engineering
+and Technology. Theme: water management and conservation.
 
 ---
 
-## 🛠 Tech Stack
-- **Framework**: Flutter (Material 3)
-- **Language**: Dart
-- **Storage**: `shared_preferences` (All data stored locally as JSON; 100% offline)
-- **Notifications**: `flutter_local_notifications` + `timezone` (exact scheduled alarms with core library desugaring)
-- **Charts**: `fl_chart` (weekly water savings bar chart)
+## The problem
+
+Most Indian homes pump water from a sump to an overhead tank with an electric motor.
+Nobody knows exactly when the tank will be full, so the motor keeps running and water
+overflows until someone notices — wasting both water and electricity, every day.
+Dripping taps and hidden pipe leaks add to the loss, unseen.
+
+Sensors and smart meters solve this, but they cost money and need installation.
+JalMitra does it with the phone people already have.
 
 ---
 
-## 📁 Architecture & Folder Structure
-```text
-lib/
-├── l10n/
-│   └── app_strings.dart       # Bilingual English + Tamil strings map
-├── models/
-│   ├── user_settings.dart     # Household config & preferences
-│   ├── motor_session.dart     # Active motor timer session
-│   ├── fixture.dart           # Tap/shower calibrated flow rates
-│   ├── daily_savings.dart     # Daily water, energy & cost savings
-│   └── meter_test.dart        # Night meter leak records
-├── screens/
-│   ├── onboarding_screen.dart # First launch tutorial & parameters setup
-│   ├── home_screen.dart       # Dashboard, savings stats & fl_chart
-│   ├── motor_guard_screen.dart# Motor countdown, level picker & self-learning
-│   ├── flow_timer_screen.dart # Fixture flow timer & 1L calibration
-│   ├── leak_check_screen.dart # Drip calculator & night meter test
-│   ├── challenges_screen.dart # Daily habit challenges & streak badges
-│   ├── settings_screen.dart   # Parameters, language, demo mode & reset
-│   └── main_screen.dart       # 5-tab bottom navigation
-├── services/
-│   ├── calc_service.dart      # Pure calculation formulas
-│   ├── notification_service.dart # Local notification & alarm scheduler
-│   └── storage_service.dart   # SharedPreferences persistence layer
-└── theme/
-    └── app_theme.dart         # Water-inspired blue/teal Material 3 palette
-```
+## Features
+
+| Screen | What it does |
+|---|---|
+| **Motor Guard** (hero) | Learns how long your tank takes to fill. Pick the current level (empty / ¼ / ½ / ¾) and switch on the motor: JalMitra shows a countdown ring and rings an **exact alarm 2 minutes before the tank is full** — even if the app is closed or the phone is locked. Gets more accurate every time you tap "Tank Full". |
+| **Flow Timer** | Time a 1-litre bottle at any tap or shower to learn its flow rate. Then pick the tap, set a limit (default 40 L) and watch live litres used. The phone vibrates when you cross the limit. Usage history is saved. |
+| **Leak Check – Drip Calculator** | Tap a big button for every drip for 10 seconds. JalMitra shows the waste per month and in buckets. "Fixed it!" adds the saving to your total. |
+| **Leak Check – Night Meter Test** | Enter your water meter reading at night (all taps closed). A 7 AM reminder asks for the morning reading. Any difference means a hidden leak, with tips on where to look. Litres or m³ meters. |
+| **Home dashboard** | "This week you saved X L · Y kWh · ₹Z", a big Motor ON button, today's challenge and a 7-day bar chart. |
+| **Challenges** | 30 simple water-saving habits (one per day), streaks, and badges at 3, 7 and 30 days. |
+| **Settings** | Edit tank size, motor HP, electricity rate and overflow minutes; English ⇄ தமிழ்; Demo Mode; recalibrate motor; manage taps; reset all data. |
+
+Also:
+
+- **Bilingual** – every screen in English and Tamil, switchable instantly.
+- **Elderly-friendly** – large text and buttons, icons with labels, blue/teal water palette.
+- **Private** – no login, no internet, no backend. All data stays on the phone.
+- **Demo Mode** – 1 minute = 1 second for all Motor Guard timings and the alarm, so a
+  24-minute tank fill can be shown live in 24 seconds.
 
 ---
 
-## 🧮 Mathematical Formulas (`lib/services/calc_service.dart`)
-All calculations are pure, deterministic functions tested in `test/calc_service_test.dart`:
-1. **Remaining Time**:
-   $$\text{remainingTimeSeconds} = \text{fillTimeSeconds} \times (1 - \text{initialLevel})$$
-2. **Self-Learning Motor Update**:
-   $$\text{measuredFullTime} = \frac{\text{actualElapsedSeconds}}{1 - \text{initialLevel}}$$
-   $$\text{newFillTime} = \frac{\text{currentFillTime} \times \text{currentFillCount} + \text{measuredFullTime}}{\text{currentFillCount} + 1}$$
-3. **Savings Calculation**:
-   $$\text{flowRate} \, (\text{L/min}) = \frac{\text{tankCapacityLitres}}{\text{fillTimeSeconds} / 60}$$
-   $$\text{waterSaved} = \text{flowRate} \times \text{typicalOverflowMinutes}$$
-   $$\text{energySaved} \, (\text{kWh}) = \text{motorHp} \times 0.746 \times \left(\frac{\text{typicalOverflowMinutes}}{60}\right)$$
-   $$\text{moneySaved} = \text{energySaved} \times \text{electricityRate}$$
+## The formulas
+
+All formulas live in [`lib/services/calc_service.dart`](lib/services/calc_service.dart) as
+small pure functions, each with a comment and a worked example. Every one is unit-tested
+in [`test/calc_service_test.dart`](test/calc_service_test.dart).
+
+### Motor Guard
+
+| Quantity | Formula | Example |
+|---|---|---|
+| Time left to fill | `remaining = fillTime × (1 − level)` | 24 min tank, half full → 12 min |
+| Alarm time | `alarm = now + remaining − 120 s` (immediately if under 120 s) | alarm after 10 min |
+| Measured fill time | `measured = actualElapsed ÷ (1 − level)` | half full, took 13 min → 26 min |
+| Self-learning | `fillTime = (fillTime × fillCount + measured) ÷ (fillCount + 1)` | (24 × 1 + 26) ÷ 2 = 25 min |
+| Motor flow rate | `flowRate (L/min) = tankCapacity ÷ (fillTime ÷ 60)` | 1000 L ÷ 24 min = **41.7 L/min** |
+| Water saved | `waterSaved = flowRate × overflowMinutes` | 41.7 × 5 = **208 L** |
+| Energy saved | `kWh = HP × 0.746 × (overflowMinutes ÷ 60)` | 1 × 0.746 × 5/60 = **0.062 kWh** |
+| Money saved | `₹ = kWh × electricityRate` | 0.062 × ₹6 = **₹0.37** |
+
+*Why 0.746?* 1 horsepower = 0.746 kilowatts.
+*Why ignore odd runs?* If "Tank Full" is tapped by accident a few seconds after starting,
+the measurement would ruin the average, so a run is only learned from if it is between
+0.25× and 4× the current fill time.
+
+### Flow Timer
+
+| Quantity | Formula | Example |
+|---|---|---|
+| Tap flow rate | `flowRate (L/s) = 1 ÷ secondsToFill1L` | 10 s → 0.1 L/s (6 L/min) |
+| Live litres | `litres = flowRate × elapsedSeconds` | 0.1 × 410 s = 41 L |
+
+### Leak Check
+
+| Quantity | Formula | Example (3 drips in 10 s) |
+|---|---|---|
+| Drips per day | `drips × 8640` (8640 ten-second windows in a day) | 25 920 |
+| Litres per day | `dripsPerDay ÷ 4000` (≈ 4000 drips per litre) | 6.48 L |
+| Litres per month | `litresPerDay × 30` | **194 L** |
+| Buckets | `litres ÷ 10` (1 bucket = 10 L) | 19.4 buckets |
+| Night meter loss | `morning − night` (× 1000 for m³ meters) | 1234.500 → 1234.512 m³ = 12 L |
+
+A difference above 0 means "Hidden leak likely!"; otherwise "No leak detected ✅".
+
+### Challenges
+
+- Today's challenge: `index = (dayOfYear − 1) mod 30`.
+- Streak: +1 if the last "Done" was yesterday, unchanged if already done today,
+  otherwise it restarts at 1. A missed day shows 0.
 
 ---
 
-## ⚡ How to Build & Run
+## Try it in 2 minutes (demo script)
+
+1. Install the APK and finish the setup (defaults are fine: 1000 L, 1 HP, ₹6/unit, 5 min).
+   Tap **Allow** when asked about alarms.
+2. **Settings → Demo Mode** on (an orange DEMO MODE badge appears).
+3. **Motor Guard → Start Calibration**, wait about 24 seconds (= 24 minutes), tap
+   **Tank Full**.
+4. Choose **Half**, tap **Motor ON – Start Guard**. Lock the phone.
+   The alarm rings about 10 seconds later. Unlock it and tap **Tank Full** to see
+   "Great! You saved ~208 L and ₹0.37 today."
+5. **Leak Check → Drip Calculator**: enter `3` and tap **Calculate** → 194 L/month.
+   Tap **Fixed it!**
+6. **Home**: tap **Done** on today's challenge and see the weekly chart grow.
+7. Switch the language to **தமிழ்** in Settings.
+
+---
+
+## Run the project
 
 ### Prerequisites
-- Flutter SDK (>= 3.5.0)
-- Android SDK (API 34)
 
-### Steps
-1. Fetch dependencies:
-   ```bash
-   flutter pub get
-   ```
-2. Run unit tests:
-   ```bash
-   flutter test
-   ```
-3. Analyze code quality:
-   ```bash
-   flutter analyze
-   ```
-4. Build Release APK:
-   ```bash
-   flutter build apk --release
-   ```
-   The generated APK will be available at:
-   `build/app/outputs/flutter-apk/app-release.apk`
+- Flutter (stable) – built and tested with Flutter 3.47.7 / Dart 3.13.5
+- Android SDK with platform 36, and JDK 17 or newer
+- An Android phone (Android 7.0+) with USB debugging on, or an emulator
+
+### Commands
+
+```bash
+flutter pub get          # install packages
+flutter analyze          # static checks (should report: No issues found)
+flutter test             # unit + widget tests
+flutter run              # run on a connected phone
+flutter build apk --release
+```
+
+The release APK is written to `build/app/outputs/flutter-apk/app-release.apk`.
+Copy it to a phone and open it to install (allow "Install unknown apps" for your file
+manager if Android asks).
+
+> The release build is signed with the debug key, which is fine for sideloading and
+> demos. Create a proper signing key before publishing to the Play Store.
+
+### Android permissions
+
+| Permission | Why |
+|---|---|
+| `POST_NOTIFICATIONS` (Android 13+) | Show the tank alarm and reminders |
+| `SCHEDULE_EXACT_ALARM` (Android 12) / `USE_EXACT_ALARM` (13+) | Ring the alarm at the exact second |
+| `USE_FULL_SCREEN_INTENT` | Wake the screen for the alarm when the phone is locked |
+| `VIBRATE` | Alarm vibration and the Flow Timer limit warning |
+| `RECEIVE_BOOT_COMPLETED` | Restore a pending alarm after the phone restarts |
+
+The app explains why before asking. If permission is denied, everything else still works
+and Motor Guard shows a warning with an **Allow alarms** button.
 
 ---
 
-## 🏆 Hackathon Details
-- **Event**: FLUID HACKATHON 2026
-- **Organizer**: Department of EEE, KPR Institute of Engineering and Technology
-- **Theme**: Water Conservation & Intelligent Management
+## How it works inside
+
+```text
+lib/
+├── main.dart                    App start: storage + notifications, then onboarding or tabs
+├── l10n/app_strings.dart        All English + Tamil text (Map-based)
+├── models/                      Plain data classes with JSON (settings, motor session,
+│                                fixture, daily savings, flow record, meter test, challenge)
+├── services/
+│   ├── calc_service.dart        Every formula, as pure functions
+│   ├── storage_service.dart     shared_preferences (all data stored locally as JSON)
+│   ├── notification_service.dart Exact alarms via flutter_local_notifications + timezone
+│   └── app_controller.dart      App state and actions; screens rebuild when it changes
+├── screens/                     Onboarding, Home, Motor Guard, Flow Timer, Leak Check,
+│                                Challenges, Settings, tap editor
+├── widgets/                     Countdown ring, weekly chart, number field, shared UI
+└── theme/app_theme.dart         Water-inspired Material 3 theme
+```
+
+**Why the alarm works when the app is closed:** the alarm is handed to Android's
+`AlarmManager` (through `zonedSchedule` with `exactAllowWhileIdle`), so Android itself
+rings it at the right time. The running session (start time, level, end time) is saved,
+so reopening the app shows the correct countdown. A boot receiver restores pending alarms
+after a restart.
+
+### Stored data (shared_preferences)
+
+`settings`, `fillTime`, `fillCount`, `activeMotorSession`, `fixtures`,
+`dailySavings` (`yyyy-MM-dd → {litres, kwh, rupees}`), `flowHistory`, `challengeStreak`,
+`lastChallengeDate`, `badges`, `meterTest`, plus `onboardingDone` and `permissionsAsked`.
+
+### Tests
+
+- `calc_service_test.dart` – every formula, using the example values above
+- `app_controller_test.dart` – calibration, alarm timing, demo mode, self-learning,
+  session restore, streaks and badges, meter reminder, reset
+- `storage_service_test.dart` – saving and loading every data type
+- `l10n_test.dart` – every string has a Tamil translation, and every key used in code exists
+- `onboarding_widget_test.dart`, `screens_widget_test.dart` – full user flows on every
+  screen, input validation, and Tamil layouts on a small phone screen
+
+---
+
+## Team & event
+
+- **Event:** Fluid Hackathon 2026
+- **Organiser:** Department of EEE, KPR Institute of Engineering and Technology
+- **Theme:** Water management and conservation

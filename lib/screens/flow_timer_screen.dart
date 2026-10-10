@@ -1,304 +1,306 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
-import '../services/calc_service.dart';
+import 'package:flutter/services.dart';
+
 import '../models/fixture.dart';
-import '../l10n/app_strings.dart';
+import '../models/flow_record.dart';
+import '../services/calc_service.dart' as calc;
+import '../theme/app_theme.dart';
+import '../widgets/app_scope.dart';
+import '../widgets/common.dart';
+import '../widgets/formatters.dart';
+import '../widgets/number_field.dart';
+import 'fixtures_screen.dart';
 
+/// Measures live litres used at a calibrated tap / shower and warns when
+/// the chosen limit is crossed.
 class FlowTimerScreen extends StatefulWidget {
-  final StorageService storageService;
+  const FlowTimerScreen({super.key});
 
-  const FlowTimerScreen({super.key, required this.storageService});
+  static const defaultLimit = 40.0;
+  static const maxLimit = 1000.0;
 
   @override
   State<FlowTimerScreen> createState() => _FlowTimerScreenState();
 }
 
 class _FlowTimerScreenState extends State<FlowTimerScreen> {
-  List<Fixture> _fixtures = [];
-  Fixture? _selectedFixture;
+  final _formKey = GlobalKey<FormState>();
+  final _limit = TextEditingController(
+      text: formatNumber(FlowTimerScreen.defaultLimit));
+  String? _selectedId;
 
-  // Usage state
-  double _limitLitres = 40.0;
-  bool _isTimerRunning = false;
-  int _elapsedSeconds = 0;
-  Timer? _timer;
-
-  // Calibration state
-  bool _isCalibrating = false;
-  int _calibSeconds = 0;
-  Timer? _calibTimer;
-  final TextEditingController _fixtureNameController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFixtures();
-  }
+  // Running state.
+  Fixture? _active;
+  double _activeLimit = FlowTimerScreen.defaultLimit;
+  DateTime? _startedAt;
+  Timer? _ticker;
+  bool _warned = false;
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _calibTimer?.cancel();
-    _fixtureNameController.dispose();
+    _ticker?.cancel();
+    _limit.dispose();
     super.dispose();
   }
 
-  void _loadFixtures() {
-    final list = widget.storageService.getFixtures();
+  double get _elapsed => _startedAt == null
+      ? 0
+      : context.app.now().difference(_startedAt!).inMilliseconds / 1000;
+
+  double get _litres =>
+      _active == null ? 0 : calc.litresUsed(_active!.flowRateLps, _elapsed);
+
+  void _start(Fixture fixture) {
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
-      _fixtures = list;
-      if (list.isNotEmpty) _selectedFixture = list.first;
+      _active = fixture;
+      _activeLimit = double.parse(_limit.text.trim());
+      _startedAt = context.app.now();
+      _warned = false;
     });
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
-  void _toggleUsageTimer() {
-    if (_isTimerRunning) {
-      _stopUsageTimer();
-    } else {
-      _startUsageTimer();
+  void _tick() {
+    if (!mounted) return;
+    setState(() {});
+    if (!_warned && _litres > _activeLimit) {
+      _warned = true;
+      _vibrateWarning();
     }
   }
 
-  void _startUsageTimer() {
-    if (_selectedFixture == null) return;
-    setState(() {
-      _isTimerRunning = true;
-      _elapsedSeconds = 0;
-    });
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() {
-        _elapsedSeconds++;
-      });
-    });
+  Future<void> _vibrateWarning() async {
+    for (var i = 0; i < 3; i++) {
+      await HapticFeedback.vibrate();
+      await SystemSound.play(SystemSoundType.alert);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
   }
 
-  void _stopUsageTimer() async {
-    _timer?.cancel();
-    final double litresUsed = CalcService.calculateLitresUsed(
-      _selectedFixture?.flowRateLps ?? 0.1,
-      _elapsedSeconds.toDouble(),
+  Future<void> _stop() async {
+    _ticker?.cancel();
+    final fixture = _active!;
+    final litres = _litres;
+    final record = FlowRecord(
+      fixtureName: fixture.name,
+      litres: litres,
+      seconds: _elapsed.round(),
+      limitLitres: _activeLimit,
+      timestamp: context.app.now(),
     );
-
     setState(() {
-      _isTimerRunning = false;
+      _active = null;
+      _startedAt = null;
     });
+    await context.app.addFlowRecord(record);
+    if (mounted) {
+      showSnack(context,
+          context.tr('usageSaved', {'litres': formatLitres(litres)}));
+    }
+  }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Session completed! Used ${litresUsed.toStringAsFixed(1)} Litres.'),
-        backgroundColor: Colors.blue,
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(context.tr('navFlow'))),
+      body: _active != null ? _buildRunning() : _buildSetup(),
     );
   }
 
-  void _startCalibration() {
-    setState(() {
-      _isCalibrating = true;
-      _calibSeconds = 0;
-    });
-    _calibTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() {
-        _calibSeconds++;
-      });
-    });
-  }
+  Widget _buildSetup() {
+    final app = context.app;
+    final fixtures = app.fixtures;
+    final theme = Theme.of(context);
+    if (fixtures.isNotEmpty && !fixtures.any((f) => f.id == _selectedId)) {
+      _selectedId = fixtures.first.id;
+    }
+    final selected = fixtures.where((f) => f.id == _selectedId).firstOrNull;
 
-  void _stopCalibrationAndSave() {
-    _calibTimer?.cancel();
-    final double calibSecs = _calibSeconds > 0 ? _calibSeconds.toDouble() : 10.0;
-    final double flowRate = CalcService.calculateFixtureFlowRateLps(calibSecs);
-
-    _showSaveFixtureDialog(flowRate);
-  }
-
-  void _showSaveFixtureDialog(double flowRate) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Save Fixture'),
-        content: TextField(
-          controller: _fixtureNameController,
-          decoration: const InputDecoration(
-            labelText: 'Fixture Name (e.g. Garden Hose)',
-            border: OutlineInputBorder(),
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SectionCard(
+            icon: Icons.shower_outlined,
+            title: context.tr('chooseFixture'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (fixtures.isEmpty)
+                  EmptyState(
+                      icon: Icons.local_drink_outlined,
+                      text: context.tr('noFixtures')),
+                RadioGroup<String>(
+                  groupValue: _selectedId,
+                  onChanged: (v) => setState(() => _selectedId = v),
+                  child: Column(
+                    children: [
+                      for (final f in fixtures)
+                        Card(
+                          color: f.id == _selectedId
+                              ? AppColors.aqua.withValues(alpha: 0.2)
+                              : null,
+                          child: RadioListTile<String>(
+                            value: f.id,
+                            title: Text(f.name,
+                                style: theme.textTheme.titleMedium),
+                            subtitle: Text(context.tr('flowPerMinute', {
+                              'lpm': (f.flowRateLps * 60).toStringAsFixed(1)
+                            })),
+                            secondary: IconButton(
+                              tooltip: context.tr('editFixture'),
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () =>
+                                  FixturesScreen.openEditor(context, f),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => FixturesScreen.openEditor(context),
+                  icon: const Icon(Icons.add),
+                  label: Text(context.tr('addFixture')),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              setState(() => _isCalibrating = false);
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final String name = _fixtureNameController.text.trim();
-              if (name.isNotEmpty) {
-                final newFixture = Fixture(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: name,
-                  flowRateLps: flowRate,
-                );
-                final updated = [..._fixtures, newFixture];
-                await widget.storageService.saveFixtures(updated);
-                _fixtureNameController.clear();
-                _loadFixtures();
-              }
-              if (!mounted) return;
-              Navigator.of(ctx).pop();
-              setState(() => _isCalibrating = false);
-            },
-            child: const Text('Save'),
-          ),
+          if (selected != null) ...[
+            const SizedBox(height: 8),
+            NumberField(
+              controller: _limit,
+              label: context.tr('limitLabel'),
+              helper: context.tr('limitHelp'),
+              suffix: context.tr('unitLitres'),
+              icon: Icons.flag_outlined,
+              max: FlowTimerScreen.maxLimit,
+              textInputAction: TextInputAction.done,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              style:
+                  FilledButton.styleFrom(minimumSize: const Size.fromHeight(64)),
+              onPressed: () => _start(selected),
+              icon: const Icon(Icons.play_arrow, size: 30),
+              label: Text(context.tr('start')),
+            ),
+          ],
+          const SizedBox(height: 16),
+          _buildHistory(app.flowHistory),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final lang = widget.storageService.getUserSettings().language;
-    final double litresUsed = _selectedFixture != null
-        ? CalcService.calculateLitresUsed(_selectedFixture!.flowRateLps, _elapsedSeconds.toDouble())
-        : 0.0;
-    final bool isLimitExceeded = litresUsed >= _limitLitres;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(AppStrings.get('flow_timer', lang)),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // Calibration Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Calibrate 1L Bottle',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        if (_isCalibrating)
-                          Chip(
-                            label: Text('$_calibSeconds s'),
-                            backgroundColor: Colors.amber.shade200,
-                          ),
-                      ],
+  Widget _buildHistory(List<FlowRecord> history) {
+    return SectionCard(
+      icon: Icons.history,
+      title: context.tr('history'),
+      child: history.isEmpty
+          ? EmptyState(icon: Icons.history, text: context.tr('noHistory'))
+          : Column(
+              children: [
+                for (final r in history.take(10))
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      r.exceededLimit
+                          ? Icons.warning_amber_rounded
+                          : Icons.check_circle_outline,
+                      color: r.exceededLimit
+                          ? AppColors.danger
+                          : AppColors.success,
+                      size: 30,
                     ),
-                    const SizedBox(height: 8),
-                    const Text('Fill a 1-litre bottle to calculate tap flow rate.'),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isCalibrating ? Colors.orange : Colors.teal,
-                      ),
-                      onPressed: _isCalibrating ? _stopCalibrationAndSave : _startCalibration,
-                      icon: Icon(_isCalibrating ? Icons.stop : Icons.science),
-                      label: Text(_isCalibrating ? 'Stop Calibration' : 'Start 1L Calibration'),
+                    title: Text(r.fixtureName),
+                    subtitle: Text(
+                        '${formatDuration(context, r.seconds.toDouble())} · ${formatClock(context, r.timestamp)}'),
+                    trailing: Text(
+                      '${formatLitres(r.litres)} ${context.tr('unitLitres')}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: r.exceededLimit ? AppColors.danger : null),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 20),
+    );
+  }
 
-            // Live Usage Timer Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    DropdownButtonFormField<Fixture>(
-                      value: _selectedFixture,
-                      decoration: const InputDecoration(
-                        labelText: 'Select Tap / Shower Fixture',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _fixtures.map((f) {
-                        return DropdownMenuItem(
-                          value: f,
-                          child: Text('${f.name} (${(f.flowRateLps * 60).toStringAsFixed(1)} L/min)'),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedFixture = val);
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Limit (Litres):', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Slider(
-                          value: _limitLitres,
-                          min: 10,
-                          max: 100,
-                          divisions: 18,
-                          label: '${_limitLitres.toInt()} L',
-                          onChanged: (val) => setState(() => _limitLitres = val),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+  Widget _buildRunning() {
+    final theme = Theme.of(context);
+    final litres = _litres;
+    final progress = calc.limitProgress(litres, _activeLimit);
+    final over = progress > 1;
+    final color = over
+        ? AppColors.danger
+        : progress > 0.8
+            ? AppColors.warning
+            : AppColors.teal;
 
-                    // Progress Ring
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 160,
-                          height: 160,
-                          child: CircularProgressIndicator(
-                            value: (_limitLitres > 0) ? (litresUsed / _limitLitres).clamp(0.0, 1.0) : 0.0,
-                            strokeWidth: 12,
-                            backgroundColor: Colors.grey.shade200,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              isLimitExceeded ? Colors.red : Theme.of(context).primaryColor,
-                            ),
-                          ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${litresUsed.toStringAsFixed(1)} L',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: isLimitExceeded ? Colors.red : Colors.black87,
-                              ),
-                            ),
-                            Text('/ ${_limitLitres.toInt()} Litres Limit'),
-                          ],
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isTimerRunning ? Colors.red : Colors.blue,
-                        minimumSize: const Size(200, 50),
-                      ),
-                      onPressed: _toggleUsageTimer,
-                      icon: Icon(_isTimerRunning ? Icons.pause : Icons.play_arrow),
-                      label: Text(_isTimerRunning ? 'Stop Flow' : 'Start Flow Timer'),
-                    ),
-                  ],
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Text(_active!.name, style: theme.textTheme.titleLarge),
+                const SizedBox(height: 16),
+                Text(
+                  formatLitres(litres),
+                  style: theme.textTheme.displayLarge?.copyWith(
+                      fontWeight: FontWeight.bold, color: color),
                 ),
-              ),
+                Text(
+                  context.tr('litresOfLimit',
+                      {'limit': formatNumber(_activeLimit)}),
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LinearProgressIndicator(
+                    value: progress.clamp(0.0, 1.0),
+                    minHeight: 24,
+                    color: color,
+                    backgroundColor: color.withValues(alpha: 0.15),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${context.tr('elapsed')}: ${formatCountdown(_elapsed)}',
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        if (over) ...[
+          const SizedBox(height: 8),
+          MessageBox(
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.danger,
+            text: context.tr('limitCrossed'),
+          ),
+        ],
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              minimumSize: const Size.fromHeight(64)),
+          onPressed: _stop,
+          icon: const Icon(Icons.stop, size: 30),
+          label: Text(context.tr('stop')),
+        ),
+      ],
     );
   }
 }

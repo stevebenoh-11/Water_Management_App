@@ -1,33 +1,32 @@
-import 'dart:convert';
-
+/// A calibrated tap / shower, e.g. "Kitchen tap".
 class Fixture {
-  final String id;
-  final String name;
-  final double flowRateLps; // Litres per second
-
-  Fixture({
+  const Fixture({
     required this.id,
     required this.name,
     required this.flowRateLps,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'flowRateLps': flowRateLps,
-    };
-  }
+  final String id;
+  final String name;
 
-  factory Fixture.fromMap(Map<String, dynamic> map) {
-    return Fixture(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      flowRateLps: (map['flowRateLps'] as num).toDouble(),
-    );
-  }
+  /// Flow rate in litres per second (1 ÷ seconds to fill a 1 L bottle).
+  final double flowRateLps;
 
-  String toJson() => json.encode(toMap());
+  Fixture copyWith({String? name, double? flowRateLps}) => Fixture(
+        id: id,
+        name: name ?? this.name,
+        flowRateLps: flowRateLps ?? this.flowRateLps,
+      );
 
-  factory Fixture.fromJson(String source) => Fixture.fromMap(json.decode(source));
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'flowRateLps': flowRateLps,
+      };
+
+  factory Fixture.fromJson(Map<String, dynamic> json) => Fixture(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        flowRateLps: (json['flowRateLps'] as num).toDouble(),
+      );
 }

@@ -1,444 +1,529 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
-import '../services/calc_service.dart';
-import '../services/notification_service.dart';
-import '../models/user_settings.dart';
+
 import '../models/motor_session.dart';
-import '../l10n/app_strings.dart';
+import '../services/app_controller.dart';
+import '../services/calc_service.dart' as calc;
+import '../theme/app_theme.dart';
+import '../widgets/app_scope.dart';
+import '../widgets/common.dart';
+import '../widgets/countdown_ring.dart';
+import '../widgets/formatters.dart';
 
+/// HERO FEATURE: predicts when the overhead tank will be full and rings an
+/// exact alarm 2 minutes before, even if the app is closed.
 class MotorGuardScreen extends StatefulWidget {
-  final StorageService storageService;
-
-  const MotorGuardScreen({super.key, required this.storageService});
+  const MotorGuardScreen({super.key});
 
   @override
   State<MotorGuardScreen> createState() => _MotorGuardScreenState();
 }
 
-class _MotorGuardScreenState extends State<MotorGuardScreen> {
-  late UserSettings _settings;
-  double? _fillTime;
-  int _fillCount = 0;
-  MotorSession? _activeSession;
+class _MotorGuardScreenState extends State<MotorGuardScreen>
+    with WidgetsBindingObserver {
+  Timer? _ticker;
+  bool? _notificationsOk;
+  bool _busy = false;
+  double _level = 0;
 
-  double _selectedLevel = 0.0; // 0.0, 0.25, 0.5, 0.75
-  Timer? _timer;
-  int _secondsRemaining = 0;
-
-  DateTime? _calibrationStartTime;
+  static const _levels = [
+    (value: 0.0, key: 'levelEmpty'),
+    (value: 0.25, key: 'levelQuarter'),
+    (value: 0.5, key: 'levelHalf'),
+    (value: 0.75, key: 'levelThreeQuarters'),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _refreshState();
+    WidgetsBinding.instance.addObserver(this);
+    // Recompute the countdown every second from the saved start/end times,
+    // so it is always correct, even after the app was closed.
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && context.app.motorSession != null) setState(() {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPermission());
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
     super.dispose();
   }
 
-  void _refreshState() {
-    _settings = widget.storageService.getUserSettings();
-    _fillTime = widget.storageService.getFillTime();
-    _fillCount = widget.storageService.getFillCount();
-    _activeSession = widget.storageService.getActiveMotorSession();
-
-    if (_activeSession != null && !_activeSession!.isCalibrating) {
-      _startCountdownTimer();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermission();
+      setState(() {});
     }
   }
 
-  void _startCountdownTimer() {
-    _timer?.cancel();
-    _updateRemainingSeconds();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateRemainingSeconds();
-    });
-  }
-
-  void _updateRemainingSeconds() {
-    if (_activeSession == null) return;
-    final now = DateTime.now();
-    final difference = _activeSession!.expectedEndTime.difference(now).inSeconds;
-    setState(() {
-      _secondsRemaining = difference > 0 ? difference : 0;
-    });
-  }
-
-  void _startCalibration() async {
-    final now = DateTime.now();
-    setState(() {
-      _calibrationStartTime = now;
-    });
-    final session = MotorSession(
-      startTime: now,
-      initialLevel: 0.0,
-      durationSeconds: 99999, // dynamic calibration
-      isCalibrating: true,
-    );
-    await widget.storageService.saveActiveMotorSession(session);
-    _refreshState();
-  }
-
-  void _finishCalibration() async {
-    if (_activeSession == null || _activeSession!.startTime == null) return;
-    final now = DateTime.now();
-    final double elapsedSeconds = now.difference(_activeSession!.startTime).inSeconds.toDouble();
-
-    if (elapsedSeconds <= 0) return;
-
-    await widget.storageService.saveMotorCalibration(elapsedSeconds, 1);
-    await widget.storageService.saveActiveMotorSession(null);
-
+  Future<void> _checkPermission() async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calibration saved! Full tank time: ${(elapsedSeconds / 60).toStringAsFixed(1)} minutes.'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    _refreshState();
+    final ok = await context.app.notifications.notificationsEnabled();
+    if (mounted) setState(() => _notificationsOk = ok);
   }
 
-  void _startMotorSession() async {
-    if (_fillTime == null || _fillTime! <= 0) return;
+  Future<void> _requestPermission() async {
+    await context.app.notifications.requestPermissions();
+    await _checkPermission();
+  }
 
-    final double remainingSeconds = CalcService.calculateRemainingTimeSeconds(
-      fillTimeSeconds: _fillTime!,
-      initialLevel: _selectedLevel,
-      isDemoMode: _settings.isDemoMode,
-    );
-
-    final now = DateTime.now();
-    final session = MotorSession(
-      startTime: now,
-      initialLevel: _selectedLevel,
-      durationSeconds: remainingSeconds,
-      isCalibrating: false,
-    );
-
-    await widget.storageService.saveActiveMotorSession(session);
-
-    // Schedule notification (offset by 120s if normal mode, or immediate if shorter)
-    double alarmOffsetSeconds = _settings.isDemoMode ? 2.0 : 120.0;
-    if (remainingSeconds < alarmOffsetSeconds) {
-      alarmOffsetSeconds = 0;
+  Future<void> _run(Future<void> Function(AppController app) action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action(context.app);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    final DateTime alarmTime = now.add(
-      Duration(seconds: (remainingSeconds - alarmOffsetSeconds).round().clamp(1, 999999)),
-    );
-
-    await NotificationService().scheduleAlarmNotification(
-      id: 101,
-      title: 'JalMitra Motor Alert',
-      body: 'Your tank is almost full! Switch off the motor now to prevent overflow.',
-      scheduledTime: alarmTime,
-    );
-
-    _refreshState();
   }
 
-  void _stopAndRecordSuccess() async {
-    if (_activeSession == null || _fillTime == null) return;
+  // ------------------------------------------------------------ actions
 
-    final now = DateTime.now();
-    final double actualElapsedSeconds =
-        now.difference(_activeSession!.startTime).inSeconds.toDouble();
+  Future<void> _finishCalibration() => _run((app) async {
+        final fill = await app.finishCalibration();
+        if (!mounted) return;
+        if (fill == null) {
+          showSnack(context, context.tr('calibrationTooShort'));
+        } else {
+          showSnack(context,
+              context.tr('calibrationSaved', {'time': formatDuration(context, fill)}));
+        }
+      });
 
-    // Update self-learning model
-    final updated = CalcService.updateSelfLearnedFillTime(
-      currentFillTime: _fillTime!,
-      currentFillCount: _fillCount,
-      actualElapsedSeconds: _settings.isDemoMode ? actualElapsedSeconds * 60 : actualElapsedSeconds,
-      initialLevel: _activeSession!.initialLevel,
+  Future<void> _tankFull() => _run((app) async {
+        final result = await app.tankFull();
+        if (result == null || !mounted) return;
+        await _showSuccess(result);
+      });
+
+  Future<void> _cancel() async {
+    final ok = await confirmDialog(
+      context,
+      title: context.tr('cancelGuardTitle'),
+      message: context.tr('cancelGuardMsg'),
+      confirmLabel: context.tr('cancelGuardConfirm'),
+      danger: true,
     );
-
-    await widget.storageService.saveMotorCalibration(
-      updated['fillTime']!,
-      updated['fillCount']!.toInt(),
-    );
-
-    // Calculate savings
-    final waterSaved = CalcService.calculateWaterSavedLitres(
-      tankCapacityLitres: _settings.tankCapacityLitres,
-      fillTimeSeconds: _fillTime!,
-      typicalOverflowMinutes: _settings.typicalOverflowMinutes,
-    );
-
-    final energySaved = CalcService.calculateEnergySavedKwh(
-      motorHp: _settings.motorHp,
-      typicalOverflowMinutes: _settings.typicalOverflowMinutes,
-    );
-
-    final moneySaved = CalcService.calculateMoneySavedRupees(
-      energySavedKwh: energySaved,
-      electricityRate: _settings.electricityRate,
-    );
-
-    await widget.storageService.addSavings(
-      litres: waterSaved,
-      kwh: energySaved,
-      rupees: moneySaved,
-    );
-
-    await NotificationService().cancelNotification(101);
-    await widget.storageService.saveActiveMotorSession(null);
-
-    _timer?.cancel();
-
-    if (!mounted) return;
-    _showSuccessDialog(waterSaved, moneySaved);
-    _refreshState();
+    if (ok) await _run((app) => app.cancelMotorSession());
   }
 
-  void _cancelSession() async {
-    await NotificationService().cancelNotification(101);
-    await widget.storageService.saveActiveMotorSession(null);
-    _timer?.cancel();
-    _refreshState();
-  }
-
-  void _showSuccessDialog(double waterSaved, double moneySaved) {
-    final lang = _settings.language;
-    showDialog(
+  Future<void> _showSuccess(MotorRunResult r) {
+    return showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(AppStrings.get('saved_popup_title', lang)),
+        icon: const Icon(Icons.celebration, size: 56, color: AppColors.success),
+        title: Text(ctx.tr('successTitle')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.verified_rounded, size: 60, color: Colors.green),
-            const SizedBox(height: 16),
             Text(
-              AppStrings.get('saved_popup_body', lang)
-                  .replaceAll('{litres}', waterSaved.toStringAsFixed(0))
-                  .replaceAll('{rupees}', moneySaved.toStringAsFixed(2)),
+              ctx.tr('successMsg', {
+                'litres': formatLitres(r.savings.litres),
+                'rupees': formatFixed(r.savings.rupees, 2),
+              }),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
+              style: Theme.of(ctx).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              r.learned
+                  ? ctx.tr('learnedMsg',
+                      {'time': formatDuration(ctx, r.fillTimeSeconds)})
+                  : ctx.tr('notLearnedMsg'),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
         actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Awesome!'),
-          )
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.tr('ok')),
+          ),
         ],
       ),
     );
   }
 
+  // ------------------------------------------------------------ build
+
   @override
   Widget build(BuildContext context) {
-    final lang = _settings.language;
+    final app = context.app;
+    final session = app.motorSession;
+
+    final Widget body;
+    if (session != null && session.isCalibration) {
+      body = _buildCalibrating(app, session);
+    } else if (session != null) {
+      body = _buildRunning(app, session);
+    } else if (!app.isCalibrated) {
+      body = _buildCalibrationIntro();
+    } else {
+      body = _buildIdle(app);
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.get('motor_guard', lang)),
+        title: Text(context.tr('navMotor')),
+        actions: const [DemoBadge()],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_settings.isDemoMode)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade100,
-                  border: Border.all(color: Colors.amber.shade800, width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.bolt, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        AppStrings.get('demo_mode_badge', lang),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_notificationsOk == false) ...[
+            MessageBox(
+              icon: Icons.notifications_off_outlined,
+              color: AppColors.warning,
+              text: context.tr('permOffWarning'),
+              action: Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _requestPermission,
+                  icon: const Icon(Icons.alarm_on),
+                  label: Text(context.tr('allowAlarms')),
                 ),
               ),
-
-            // Mode 1: No Calibration yet
-            if (_fillTime == null && _activeSession == null) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.build_outlined, size: 60, color: Colors.orange),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppStrings.get('calibration_needed', lang),
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        AppStrings.get('calib_instruction', lang),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14, color: Colors.black70),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: _startCalibration,
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: Text(AppStrings.get('start_calibration', lang)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            // Mode 2: Calibration in progress
-            if (_activeSession != null && _activeSession!.isCalibrating) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Calibrating Overhead Tank Motor...',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Tap "Tank Full" as soon as water reaches the overflow pipe.'),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        onPressed: _finishCalibration,
-                        icon: const Icon(Icons.check_circle_rounded),
-                        label: Text(AppStrings.get('tank_full', lang)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            // Mode 3: Active Motor Guard Countdown
-            if (_activeSession != null && !_activeSession!.isCalibrating) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      Text(
-                        AppStrings.get('motor_running', lang),
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 24),
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 180,
-                            height: 180,
-                            child: CircularProgressIndicator(
-                              value: _activeSession!.durationSeconds > 0
-                                  ? _secondsRemaining / _activeSession!.durationSeconds
-                                  : 0.0,
-                              strokeWidth: 14,
-                              backgroundColor: Colors.blue.shade100,
-                              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${(_secondsRemaining ~/ 60).toString().padLeft(2, '0')}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}',
-                                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text('Remaining', style: TextStyle(color: Colors.black54)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                            onPressed: _stopAndRecordSuccess,
-                            icon: const Icon(Icons.check_rounded),
-                            label: Text(AppStrings.get('tank_full', lang)),
-                          ),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                            onPressed: _cancelSession,
-                            icon: const Icon(Icons.close_rounded),
-                            label: Text(AppStrings.get('stop_cancel', lang)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            // Mode 4: Calibrated & Ready to start daily session
-            if (_fillTime != null && _activeSession == null) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        AppStrings.get('select_level', lang),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      Column(
-                        children: [
-                          _buildLevelRadio(0.0, AppStrings.get('level_empty', lang)),
-                          _buildLevelRadio(0.25, AppStrings.get('level_quarter', lang)),
-                          _buildLevelRadio(0.5, AppStrings.get('level_half', lang)),
-                          _buildLevelRadio(0.75, AppStrings.get('level_three_quarter', lang)),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _startMotorSession,
-                          icon: const Icon(Icons.alarm_on_rounded),
-                          label: Text(AppStrings.get('start_motor_timer', lang)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
+            const SizedBox(height: 12),
           ],
-        ),
+          if (app.demoMode && session == null) ...[
+            MessageBox(
+              icon: Icons.fast_forward,
+              color: AppColors.warning,
+              text: context.tr('demoExplain'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          body,
+        ],
       ),
     );
   }
 
-  Widget _buildLevelRadio(double value, String label) {
-    return RadioListTile<double>(
-      title: Text(label),
-      value: value,
-      groupValue: _selectedLevel,
-      onChanged: (val) {
-        if (val != null) setState(() => _selectedLevel = val);
-      },
+  Widget _buildCalibrationIntro() {
+    final theme = Theme.of(context);
+    return SectionCard(
+      icon: Icons.tune,
+      title: context.tr('calibrateTitle'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(context.tr('calibrateIntro'), style: theme.textTheme.bodyLarge),
+          const SizedBox(height: 12),
+          for (final (i, key) in ['calibrateStep1', 'calibrateStep2', 'calibrateStep3'].indexed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.blue,
+                    child: Text('${i + 1}',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Text(context.tr(key),
+                          style: theme.textTheme.bodyLarge)),
+                ],
+              ),
+            ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _busy ? null : () => _run((app) => app.startCalibration()),
+            icon: const Icon(Icons.play_arrow),
+            label: Text(context.tr('startCalibration')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalibrating(AppController app, MotorSession session) {
+    final theme = Theme.of(context);
+    final elapsed = app.elapsedSeconds(session);
+    final shown =
+        calc.fromDeviceSeconds(elapsed, demoMode: session.demoMode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: CountdownRing(
+            progress: (elapsed % 60) / 60,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.timer_outlined,
+                    size: 36, color: AppColors.blue),
+                Text(formatCountdown(shown),
+                    style: theme.textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.deepBlue)),
+                Text(context.tr('calibrating'),
+                    style: theme.textTheme.bodyLarge),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(context.tr('calibratingHint'),
+            textAlign: TextAlign.center, style: theme.textTheme.bodyLarge),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.success,
+              minimumSize: const Size.fromHeight(64)),
+          onPressed: _busy ? null : _finishCalibration,
+          icon: const Icon(Icons.check_circle, size: 28),
+          label: Text(context.tr('tankFull')),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+          onPressed: _busy ? null : _cancel,
+          icon: const Icon(Icons.close),
+          label: Text(context.tr('cancel')),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIdle(AppController app) {
+    final theme = Theme.of(context);
+    final fill = app.fillTime!;
+    final remaining = calc.remainingFillSeconds(fill, _level);
+    final deviceRemaining =
+        calc.toDeviceSeconds(remaining, demoMode: app.demoMode);
+    final fullAt =
+        app.now().add(Duration(milliseconds: (deviceRemaining * 1000).round()));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.speed, color: AppColors.teal, size: 32),
+            title: Text(context.tr('fillTimeLearned',
+                {'time': formatDuration(context, fill)})),
+            subtitle: Text(context.tr('fillRuns', {'n': '${app.fillCount}'})),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SectionCard(
+          icon: Icons.water,
+          title: context.tr('levelQuestion'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GridView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                // Fixed height so longer Tamil labels never overflow.
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  mainAxisExtent: 124,
+                ),
+                children: [
+                  for (final l in _levels)
+                    _LevelTile(
+                      level: l.value,
+                      label: context.tr(l.key),
+                      selected: _level == l.value,
+                      onTap: () => setState(() => _level = l.value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.tr('expectedFullIn', {
+                  'time': formatDuration(context, deviceRemaining),
+                  'clock': formatClock(context, fullAt),
+                }),
+                style: theme.textTheme.bodyLarge,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(72)),
+          onPressed:
+              _busy ? null : () => _run((app) => app.startMotorSession(_level)),
+          icon: const Icon(Icons.power_settings_new, size: 32),
+          label: Text(context.tr('startGuard')),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRunning(AppController app, MotorSession session) {
+    final theme = Theme.of(context);
+    final total =
+        session.endTime.difference(session.startTime).inMilliseconds / 1000;
+    final remaining = app.remainingSeconds(session);
+    final progress = total <= 0 ? 1.0 : 1 - remaining / total;
+    final done = remaining <= 0;
+    final alarmAt = app.alarmTimeFor(session);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: CountdownRing(
+            progress: progress,
+            color: done ? AppColors.danger : AppColors.blue,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(done ? Icons.warning_amber_rounded : Icons.water_drop,
+                      size: 36,
+                      color: done ? AppColors.danger : AppColors.blue),
+                  Text(
+                    formatCountdown(remaining),
+                    style: theme.textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: done ? AppColors.danger : AppColors.deepBlue),
+                  ),
+                  Text(
+                    context.tr(done ? 'tankShouldBeFull' : 'timeLeft'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.flag, color: AppColors.teal, size: 30),
+                title: Text(context.tr('expectedFullAt')),
+                trailing: Text(formatClock(context, session.endTime),
+                    style: theme.textTheme.titleMedium),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.alarm, color: AppColors.warning, size: 30),
+                title: Text(context.tr('alarmAt')),
+                trailing: Text(formatClock(context, alarmAt),
+                    style: theme.textTheme.titleMedium),
+              ),
+            ],
+          ),
+        ),
+        if (done) ...[
+          const SizedBox(height: 8),
+          MessageBox(
+            icon: Icons.power_off,
+            color: AppColors.danger,
+            text: context.tr('alarmBody'),
+          ),
+        ],
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.success,
+              minimumSize: const Size.fromHeight(64)),
+          onPressed: _busy ? null : _tankFull,
+          icon: const Icon(Icons.check_circle, size: 28),
+          label: Text(context.tr('tankFull')),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+          onPressed: _busy ? null : _cancel,
+          icon: const Icon(Icons.close),
+          label: Text(context.tr('cancel')),
+        ),
+      ],
+    );
+  }
+}
+
+/// One choice in the level picker, with a mini tank drawing.
+class _LevelTile extends StatelessWidget {
+  const _LevelTile({
+    required this.level,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final double level;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppColors.blue : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppColors.blue, width: selected ? 3 : 1.5),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: selected ? Colors.white : AppColors.deepBlue,
+                        width: 2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    heightFactor: level == 0 ? 0.05 : level,
+                    widthFactor: 1,
+                    child: Container(
+                        color: selected ? AppColors.aqua : AppColors.blue),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : AppColors.deepBlue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

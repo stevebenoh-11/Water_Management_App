@@ -1,41 +1,49 @@
-import 'dart:convert';
+/// Unit of a water meter reading.
+enum MeterUnit { litres, cubicMetres }
 
-class MeterTestRecord {
-  final double? nightReading;
-  final DateTime? nightTime;
-  final double? morningReading;
-  final DateTime? morningTime;
-  final String unit; // 'litres' or 'm3'
-
-  MeterTestRecord({
-    this.nightReading,
-    this.nightTime,
+/// Night Meter Test: a night reading (all taps closed) and a morning reading.
+class MeterTest {
+  const MeterTest({
+    required this.nightReading,
+    required this.nightTime,
+    required this.unit,
     this.morningReading,
     this.morningTime,
-    this.unit = 'litres',
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'nightReading': nightReading,
-      'nightTime': nightTime?.toIso8601String(),
-      'morningReading': morningReading,
-      'morningTime': morningTime?.toIso8601String(),
-      'unit': unit,
-    };
-  }
+  final double nightReading;
+  final DateTime nightTime;
+  final MeterUnit unit;
+  final double? morningReading;
+  final DateTime? morningTime;
 
-  factory MeterTestRecord.fromMap(Map<String, dynamic> map) {
-    return MeterTestRecord(
-      nightReading: (map['nightReading'] as num?)?.toDouble(),
-      nightTime: map['nightTime'] != null ? DateTime.parse(map['nightTime']) : null,
-      morningReading: (map['morningReading'] as num?)?.toDouble(),
-      morningTime: map['morningTime'] != null ? DateTime.parse(map['morningTime']) : null,
-      unit: map['unit'] as String? ?? 'litres',
-    );
-  }
+  bool get isComplete => morningReading != null;
 
-  String toJson() => json.encode(toMap());
+  MeterTest withMorning(double reading, DateTime time) => MeterTest(
+        nightReading: nightReading,
+        nightTime: nightTime,
+        unit: unit,
+        morningReading: reading,
+        morningTime: time,
+      );
 
-  factory MeterTestRecord.fromJson(String source) => MeterTestRecord.fromMap(json.decode(source));
+  Map<String, dynamic> toJson() => {
+        'nightReading': nightReading,
+        'nightTime': nightTime.toIso8601String(),
+        'unit': unit.name,
+        'morningReading': morningReading,
+        'morningTime': morningTime?.toIso8601String(),
+      };
+
+  factory MeterTest.fromJson(Map<String, dynamic> json) => MeterTest(
+        nightReading: (json['nightReading'] as num).toDouble(),
+        nightTime: DateTime.parse(json['nightTime'] as String),
+        unit: json['unit'] == MeterUnit.cubicMetres.name
+            ? MeterUnit.cubicMetres
+            : MeterUnit.litres,
+        morningReading: (json['morningReading'] as num?)?.toDouble(),
+        morningTime: json['morningTime'] == null
+            ? null
+            : DateTime.parse(json['morningTime'] as String),
+      );
 }

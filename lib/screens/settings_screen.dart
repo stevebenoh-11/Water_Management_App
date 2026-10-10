@@ -1,238 +1,248 @@
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
-import '../models/user_settings.dart';
-import '../l10n/app_strings.dart';
-import 'onboarding_screen.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/app_scope.dart';
+import '../widgets/common.dart';
+import '../widgets/formatters.dart';
+import '../widgets/language_toggle.dart';
+import '../widgets/number_field.dart';
+import 'fixtures_screen.dart';
+
+/// Edit home setup, language, demo mode, calibration, fixtures, reset.
 class SettingsScreen extends StatefulWidget {
-  final StorageService storageService;
-
-  const SettingsScreen({super.key, required this.storageService});
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late UserSettings _settings;
-  late TextEditingController _capacityController;
-  late TextEditingController _hpController;
-  late TextEditingController _rateController;
-  late TextEditingController _overflowController;
+  final _formKey = GlobalKey<FormState>();
+  final _tank = TextEditingController();
+  final _hp = TextEditingController();
+  final _rate = TextEditingController();
+  final _overflow = TextEditingController();
+  bool _loaded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _settings = widget.storageService.getUserSettings();
-    _capacityController = TextEditingController(text: _settings.tankCapacityLitres.toStringAsFixed(0));
-    _hpController = TextEditingController(text: _settings.motorHp.toStringAsFixed(1));
-    _rateController = TextEditingController(text: _settings.electricityRate.toStringAsFixed(1));
-    _overflowController = TextEditingController(text: _settings.typicalOverflowMinutes.toStringAsFixed(0));
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loaded) {
+      _fillFromSettings();
+      _loaded = true;
+    }
+  }
+
+  void _fillFromSettings() {
+    final s = context.app.settings;
+    _tank.text = formatNumber(s.tankCapacityLitres);
+    _hp.text = formatNumber(s.motorHp);
+    _rate.text = formatNumber(s.electricityRate);
+    _overflow.text = formatNumber(s.overflowMinutes);
   }
 
   @override
   void dispose() {
-    _capacityController.dispose();
-    _hpController.dispose();
-    _rateController.dispose();
-    _overflowController.dispose();
+    _tank.dispose();
+    _hp.dispose();
+    _rate.dispose();
+    _overflow.dispose();
     super.dispose();
   }
 
-  void _saveSettings() async {
-    final double capacity = double.tryParse(_capacityController.text) ?? 1000.0;
-    final double hp = double.tryParse(_hpController.text) ?? 1.0;
-    final double rate = double.tryParse(_rateController.text) ?? 6.0;
-    final double overflow = double.tryParse(_overflowController.text) ?? 5.0;
-
-    final updated = _settings.copyWith(
-      tankCapacityLitres: capacity,
-      motorHp: hp,
-      electricityRate: rate,
-      typicalOverflowMinutes: overflow,
-    );
-
-    await widget.storageService.saveUserSettings(updated);
-    setState(() => _settings = updated);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings saved successfully!'), backgroundColor: Colors.green),
-    );
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final app = context.app;
+    await app.updateSettings(app.settings.copyWith(
+      tankCapacityLitres: double.parse(_tank.text.trim()),
+      motorHp: double.parse(_hp.text.trim()),
+      electricityRate: double.parse(_rate.text.trim()),
+      overflowMinutes: double.parse(_overflow.text.trim()),
+    ));
+    if (mounted) showSnack(context, context.tr('settingsSaved'));
   }
 
-  void _toggleLanguage(String lang) async {
-    final updated = _settings.copyWith(language: lang);
-    await widget.storageService.saveUserSettings(updated);
-    setState(() => _settings = updated);
-  }
-
-  void _toggleDemoMode(bool val) async {
-    final updated = _settings.copyWith(isDemoMode: val);
-    await widget.storageService.saveUserSettings(updated);
-    setState(() => _settings = updated);
-  }
-
-  void _recalibrateMotor() async {
-    await widget.storageService.saveMotorCalibration(0, 0);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Motor calibration reset. Go to Motor Guard tab to re-calibrate.')),
+  Future<void> _recalibrate() async {
+    final ok = await confirmDialog(
+      context,
+      title: context.tr('recalibrateTitle'),
+      message: context.tr('recalibrateMsg'),
+      confirmLabel: context.tr('recalibrate'),
     );
+    if (!ok || !mounted) return;
+    await context.app.recalibrate();
+    if (mounted) showSnack(context, context.tr('recalibrateDone'));
   }
 
-  void _resetAllData() {
-    final lang = _settings.language;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppStrings.get('reset_data', lang)),
-        content: Text(AppStrings.get('confirm_reset', lang)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(AppStrings.get('cancel', lang)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await widget.storageService.clearAll();
-              if (!mounted) return;
-              Navigator.of(ctx).pop();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => OnboardingScreen(storageService: widget.storageService),
-                ),
-              );
-            },
-            child: Text(AppStrings.get('confirm', lang)),
-          ),
-        ],
-      ),
+  Future<void> _reset() async {
+    final ok = await confirmDialog(
+      context,
+      title: context.tr('resetTitle'),
+      message: context.tr('resetMsg'),
+      confirmLabel: context.tr('resetConfirm'),
+      danger: true,
     );
+    if (!ok || !mounted) return;
+    await context.app.resetAll();
   }
 
   @override
   Widget build(BuildContext context) {
-    final lang = _settings.language;
+    final app = context.app;
+    final theme = Theme.of(context);
+    final fill = app.fillTime;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.get('settings', lang)),
+        title: Text(context.tr('navSettings')),
+        actions: const [DemoBadge()],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Language Selector Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(AppStrings.get('language', lang), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    SegmentedButton<String>(
-                      segments: [
-                        ButtonSegment(value: 'en', label: Text(AppStrings.get('english', lang))),
-                        ButtonSegment(value: 'ta', label: Text(AppStrings.get('tamil', lang))),
-                      ],
-                      selected: {_settings.language},
-                      onSelectionChanged: (val) => _toggleLanguage(val.first),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Demo Mode Toggle Card
-            Card(
-              child: SwitchListTile(
-                title: Text(AppStrings.get('demo_mode_setting', lang), style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Compresses 1 minute into 1 second for fast testing'),
-                value: _settings.isDemoMode,
-                onChanged: _toggleDemoMode,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Edit Household Parameters
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Household Parameters', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _capacityController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: AppStrings.get('tank_capacity', lang),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _hpController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: AppStrings.get('motor_hp', lang),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _rateController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: AppStrings.get('elec_rate', lang),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _overflowController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: AppStrings.get('typical_overflow', lang),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _saveSettings,
-                      child: const Text('Save Parameters'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Recalibrate & Reset Buttons
-            Card(
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ---- Home setup
+          SectionCard(
+            icon: Icons.home_outlined,
+            title: context.tr('setupTitle'),
+            child: Form(
+              key: _formKey,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.refresh, color: Colors.blue),
-                    title: const Text('Recalibrate Motor'),
-                    onTap: _recalibrateMotor,
+                  NumberField(
+                    controller: _tank,
+                    label: context.tr('tankCapacity'),
+                    suffix: context.tr('unitLitres'),
+                    icon: Icons.propane_tank_outlined,
+                    max: 100000,
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever, color: Colors.red),
-                    title: Text(AppStrings.get('reset_data', lang), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                    onTap: _resetAllData,
+                  const SizedBox(height: 16),
+                  NumberField(
+                    controller: _hp,
+                    label: context.tr('motorHp'),
+                    suffix: context.tr('unitHp'),
+                    icon: Icons.electric_bolt_outlined,
+                    max: 20,
+                  ),
+                  const SizedBox(height: 16),
+                  NumberField(
+                    controller: _rate,
+                    label: context.tr('electricityRate'),
+                    suffix: context.tr('unitRupeesPerUnit'),
+                    icon: Icons.currency_rupee,
+                    max: 100,
+                  ),
+                  const SizedBox(height: 16),
+                  NumberField(
+                    controller: _overflow,
+                    label: context.tr('overflowMinutes'),
+                    suffix: context.tr('unitMinutes'),
+                    icon: Icons.timer_outlined,
+                    max: 240,
+                    textInputAction: TextInputAction.done,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(context.tr('save')),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // ---- Language
+          SectionCard(
+            icon: Icons.translate,
+            title: context.tr('language'),
+            child: const Align(
+                alignment: Alignment.centerLeft, child: LanguageToggle()),
+          ),
+
+          // ---- Demo mode
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.fast_forward,
+                  color: AppColors.warning, size: 30),
+              title: Text(context.tr('demoMode')),
+              subtitle: Text(context.tr('demoModeHelp')),
+              value: app.demoMode,
+              onChanged: app.setDemoMode,
+            ),
+          ),
+
+          // ---- Motor & fixtures
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.power_settings_new,
+                      color: AppColors.blue, size: 30),
+                  title: Text(context.tr('motorCalibration')),
+                  subtitle: Text(fill == null
+                      ? context.tr('notCalibrated')
+                      : '${context.tr('fillTimeLearned', {'time': formatDuration(context, fill)})}\n${context.tr('fillRuns', {'n': '${app.fillCount}'})}'),
+                  isThreeLine: fill != null,
+                ),
+                if (fill != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52)),
+                      onPressed: _recalibrate,
+                      icon: const Icon(Icons.tune),
+                      label: Text(context.tr('recalibrate')),
+                    ),
+                  ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.shower_outlined,
+                      color: AppColors.blue, size: 30),
+                  title: Text(context.tr('manageFixtures')),
+                  subtitle: Text(context.tr(
+                      'fixtureCount', {'n': '${app.fixtures.length}'})),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                        builder: (_) => const FixturesScreen()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.notifications_active_outlined,
+                      color: AppColors.blue, size: 30),
+                  title: Text(context.tr('alarmPermissions')),
+                  subtitle: Text(context.tr('alarmPermissionsHelp')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => app.notifications.requestPermissions(),
+                ),
+              ],
+            ),
+          ),
+
+          // ---- Danger zone
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: const BorderSide(color: AppColors.danger),
+            ),
+            onPressed: _reset,
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: Text(context.tr('resetAll')),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            context.tr('about'),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

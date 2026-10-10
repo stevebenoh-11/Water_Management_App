@@ -1,38 +1,43 @@
 import 'package:flutter/material.dart';
-import 'services/storage_service.dart';
-import 'services/notification_service.dart';
-import 'theme/app_theme.dart';
-import 'screens/main_screen.dart';
+
+import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/app_controller.dart';
+import 'services/notification_service.dart';
+import 'services/storage_service.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_scope.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Storage Service
-  final storageService = await StorageService.getInstance();
-
-  // Initialize Local Notifications
-  await NotificationService().initialize();
-
-  runApp(JalMitraApp(storageService: storageService));
+  final storage = await StorageService.create();
+  final notifications = NotificationService();
+  await notifications.init();
+  runApp(JalMitraApp(
+    controller: AppController(storage, notifications: notifications),
+  ));
 }
 
 class JalMitraApp extends StatelessWidget {
-  final StorageService storageService;
+  const JalMitraApp({super.key, required this.controller});
 
-  const JalMitraApp({super.key, required this.storageService});
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) {
-    final settings = storageService.getUserSettings();
-
-    return MaterialApp(
-      title: 'JalMitra',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.themeData,
-      home: settings.isOnboardingCompleted
-          ? MainScreen(storageService: storageService)
-          : OnboardingScreen(storageService: storageService),
+    return AppScope(
+      controller: controller,
+      child: ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => MaterialApp(
+          title: controller.strings.get('appName'),
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          home: controller.onboarded
+              ? const MainShell()
+              : const OnboardingScreen(),
+        ),
+      ),
     );
   }
 }
